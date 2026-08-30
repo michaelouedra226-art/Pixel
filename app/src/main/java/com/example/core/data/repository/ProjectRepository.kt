@@ -7,8 +7,10 @@ import com.example.core.data.local.ProjectDao
 import com.example.core.data.local.ProjectEntity
 import com.example.core.engine.model.BezierLayer
 import com.example.core.engine.model.CanvasProject
+import com.example.core.engine.model.ColorEraserDef
 import com.example.core.engine.model.ColorFill
 import com.example.core.engine.model.DrawingLayer
+import com.example.core.engine.model.DrawingStroke
 import com.example.core.engine.model.GradientDef
 import com.example.core.engine.model.GradientType
 import com.example.core.engine.model.ImageLayer
@@ -17,7 +19,9 @@ import com.example.core.engine.model.Layer3DEffect
 import com.example.core.engine.model.ShapeLayer
 import com.example.core.engine.model.ShapeType
 import com.example.core.engine.model.StrokeDef
+import com.example.core.engine.model.TextCurvature
 import com.example.core.engine.model.TextLayer
+import com.example.core.engine.model.TextReflection
 import com.example.core.engine.model.Transform
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
@@ -37,14 +41,14 @@ data class ProjectPreset(
 
 object PresetLibrary {
     val presets = listOf(
-        ProjectPreset("Instagram Square", 1080, 1080, "Social", "instagram"),
-        ProjectPreset("Instagram Story / Reel", 1080, 1920, "Social", "story"),
-        ProjectPreset("YouTube Thumbnail", 1280, 720, "Video", "youtube"),
-        ProjectPreset("Facebook Post", 1200, 630, "Social", "facebook"),
-        ProjectPreset("Twitter / X Header", 1500, 500, "Header", "twitter"),
-        ProjectPreset("A4 Poster (300 DPI)", 1240, 1754, "Print", "poster"),
-        ProjectPreset("Twitch Banner", 1200, 480, "Gaming", "twitch"),
-        ProjectPreset("Custom Resolution", 1080, 1080, "Custom", "custom")
+        ProjectPreset("Carré Instagram", 1080, 1080, "Réseaux", "instagram"),
+        ProjectPreset("Story / Reel Instagram", 1080, 1920, "Réseaux", "story"),
+        ProjectPreset("Miniature YouTube", 1280, 720, "Vidéo", "youtube"),
+        ProjectPreset("Publication Facebook", 1200, 630, "Réseaux", "facebook"),
+        ProjectPreset("Bannière Twitter / X", 1500, 500, "En-tête", "twitter"),
+        ProjectPreset("Affiche A4 (300 DPI)", 1240, 1754, "Impression", "poster"),
+        ProjectPreset("Bannière Twitch", 1200, 480, "Gaming", "twitch"),
+        ProjectPreset("Format Personnalisé", 1080, 1080, "Custom", "custom")
     )
 }
 
@@ -75,7 +79,7 @@ class ProjectRepository(
     suspend fun duplicateProject(project: CanvasProject): CanvasProject = withContext(Dispatchers.IO) {
         val newProject = project.copy(
             id = UUID.randomUUID().toString(),
-            title = "${project.title} (Copy)",
+            title = "${project.title} (Copie)",
             createdAt = System.currentTimeMillis(),
             updatedAt = System.currentTimeMillis()
         )
@@ -89,7 +93,7 @@ class ProjectRepository(
 
         val bgShape = ShapeLayer(
             id = UUID.randomUUID().toString(),
-            name = "Geometric Backdrop",
+            name = "Fond Géométrique",
             transform = Transform(
                 x = w * 0.1f,
                 y = h * 0.15f,
@@ -113,7 +117,7 @@ class ProjectRepository(
 
         val titleText = TextLayer(
             id = UUID.randomUUID().toString(),
-            name = "Main Heading",
+            name = "Titre Principal",
             transform = Transform(
                 x = w * 0.15f,
                 y = h * 0.38f,
@@ -131,15 +135,15 @@ class ProjectRepository(
 
         val subtitleText = TextLayer(
             id = UUID.randomUUID().toString(),
-            name = "Subtitle",
+            name = "Sous-titre",
             transform = Transform(
                 x = w * 0.2f,
                 y = h * 0.52f,
                 width = w * 0.6f,
                 height = 70f
             ),
-            text = "PRO GRAPHIC STUDIO",
-            fontSize = 20f,
+            text = "STUDIO GRAPHIQUE PRO",
+            fontSize = 18f,
             isBold = true,
             letterSpacing = 4f,
             fill = ColorFill(solidColor = 0xFFE5E4E2),
@@ -149,7 +153,7 @@ class ProjectRepository(
 
         return CanvasProject(
             id = UUID.randomUUID().toString(),
-            title = "New ${preset.name}",
+            title = "Nouveau ${preset.name}",
             width = preset.width,
             height = preset.height,
             backgroundColor = 0xFF0A0A0C,
@@ -231,7 +235,10 @@ class ProjectRepository(
             "height" to layer.transform.height,
             "rotation" to layer.transform.rotation,
             "scaleX" to layer.transform.scaleX,
-            "scaleY" to layer.transform.scaleY
+            "scaleY" to layer.transform.scaleY,
+            "rotationX" to layer.transform.rotationX,
+            "rotationY" to layer.transform.rotationY,
+            "perspective" to layer.transform.perspective
         )
         when (layer) {
             is TextLayer -> {
@@ -249,7 +256,10 @@ class ProjectRepository(
                 map["strokeEnabled"] = layer.stroke.isEnabled
                 map["effect3DEnabled"] = layer.effect3D.isEnabled
                 map["effect3DDepth"] = layer.effect3D.depth
+                map["effect3DColor"] = layer.effect3D.color
                 map["reflectionEnabled"] = layer.reflection.isEnabled
+                map["curvatureBend"] = layer.curvature.bend
+                map["curvatureEnabled"] = layer.curvature.isEnabled
             }
             is ShapeLayer -> {
                 map["type"] = "SHAPE"
@@ -261,6 +271,8 @@ class ProjectRepository(
                 map["strokeEnabled"] = layer.stroke.isEnabled
                 map["polygonSides"] = layer.polygonSides
                 map["starPoints"] = layer.starPoints
+                map["effect3DEnabled"] = layer.effect3D.isEnabled
+                map["effect3DDepth"] = layer.effect3D.depth
             }
             is ImageLayer -> {
                 map["type"] = "IMAGE"
@@ -269,6 +281,9 @@ class ProjectRepository(
                 if (layer.imageUri != null) {
                     map["imageUri"] = layer.imageUri
                 }
+                map["colorEraserEnabled"] = layer.colorEraser.isEnabled
+                map["colorEraserColor"] = layer.colorEraser.targetColor
+                map["colorEraserTolerance"] = layer.colorEraser.tolerance
             }
             else -> {
                 map["type"] = "GENERIC"
@@ -280,7 +295,7 @@ class ProjectRepository(
     private fun mapToLayer(map: Map<String, Any>): Layer? {
         val type = map["type"] as? String ?: return null
         val id = map["id"] as? String ?: UUID.randomUUID().toString()
-        val name = map["name"] as? String ?: "Layer"
+        val name = map["name"] as? String ?: "Calque"
         val isVisible = map["isVisible"] as? Boolean ?: true
         val isLocked = map["isLocked"] as? Boolean ?: false
         val opacity = (map["opacity"] as? Number)?.toFloat() ?: 1f
@@ -293,7 +308,10 @@ class ProjectRepository(
             height = (map["height"] as? Number)?.toFloat() ?: 200f,
             rotation = (map["rotation"] as? Number)?.toFloat() ?: 0f,
             scaleX = (map["scaleX"] as? Number)?.toFloat() ?: 1f,
-            scaleY = (map["scaleY"] as? Number)?.toFloat() ?: 1f
+            scaleY = (map["scaleY"] as? Number)?.toFloat() ?: 1f,
+            rotationX = (map["rotationX"] as? Number)?.toFloat() ?: 0f,
+            rotationY = (map["rotationY"] as? Number)?.toFloat() ?: 0f,
+            perspective = (map["perspective"] as? Number)?.toFloat() ?: 0f
         )
 
         return when (type) {
@@ -305,7 +323,7 @@ class ProjectRepository(
                 opacity = opacity,
                 zIndex = zIndex,
                 transform = transform,
-                text = map["text"] as? String ?: "Text",
+                text = map["text"] as? String ?: "Texte",
                 fontSize = (map["fontSize"] as? Number)?.toFloat() ?: 36f,
                 isBold = map["isBold"] as? Boolean ?: true,
                 isItalic = map["isItalic"] as? Boolean ?: false,
@@ -320,10 +338,15 @@ class ProjectRepository(
                 ),
                 effect3D = Layer3DEffect(
                     isEnabled = map["effect3DEnabled"] as? Boolean ?: false,
-                    depth = (map["effect3DDepth"] as? Number)?.toFloat() ?: 8f
+                    depth = (map["effect3DDepth"] as? Number)?.toFloat() ?: 8f,
+                    color = (map["effect3DColor"] as? Number)?.toLong() ?: 0xFF5B450C
                 ),
-                reflection = com.example.core.engine.model.TextReflection(
+                reflection = TextReflection(
                     isEnabled = map["reflectionEnabled"] as? Boolean ?: false
+                ),
+                curvature = TextCurvature(
+                    isEnabled = map["curvatureEnabled"] as? Boolean ?: false,
+                    bend = (map["curvatureBend"] as? Number)?.toFloat() ?: 0f
                 )
             )
             "SHAPE" -> ShapeLayer(
@@ -345,6 +368,10 @@ class ProjectRepository(
                     isEnabled = map["strokeEnabled"] as? Boolean ?: true,
                     color = (map["strokeColor"] as? Number)?.toLong() ?: 0xFFD4AF37,
                     width = (map["strokeWidth"] as? Number)?.toFloat() ?: 3f
+                ),
+                effect3D = Layer3DEffect(
+                    isEnabled = map["effect3DEnabled"] as? Boolean ?: false,
+                    depth = (map["effect3DDepth"] as? Number)?.toFloat() ?: 8f
                 )
             )
             "IMAGE" -> ImageLayer(
@@ -357,7 +384,12 @@ class ProjectRepository(
                 transform = transform,
                 imageUri = map["imageUri"] as? String,
                 isSticker = map["isSticker"] as? Boolean ?: false,
-                stickerName = map["stickerName"] as? String ?: ""
+                stickerName = map["stickerName"] as? String ?: "",
+                colorEraser = ColorEraserDef(
+                    isEnabled = map["colorEraserEnabled"] as? Boolean ?: false,
+                    targetColor = (map["colorEraserColor"] as? Number)?.toLong() ?: 0xFFFFFFFF,
+                    tolerance = (map["colorEraserTolerance"] as? Number)?.toFloat() ?: 25f
+                )
             )
             else -> null
         }

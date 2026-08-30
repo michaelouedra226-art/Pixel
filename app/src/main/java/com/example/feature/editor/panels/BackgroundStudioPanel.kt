@@ -50,7 +50,7 @@ fun BackgroundStudioPanel(
             .padding(14.dp)
             .verticalScroll(rememberScrollState())
     ) {
-        Text("Canvas Background & Ratio", color = ChampagneGold, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+        Text("Arrière-plan & Dimensions du canevas", color = ChampagneGold, fontSize = 14.sp, fontWeight = FontWeight.Bold)
 
         Spacer(modifier = Modifier.height(10.dp))
 
@@ -59,7 +59,7 @@ fun BackgroundStudioPanel(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("Transparent Canvas (PNG Alpha)", color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+            Text("Fond Transparent (Alpha PNG)", color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
             Switch(
                 checked = project.isTransparentBg,
                 onCheckedChange = { onUpdateProject(project.copy(isTransparentBg = it)) },
@@ -72,7 +72,7 @@ fun BackgroundStudioPanel(
 
         if (!project.isTransparentBg) {
             Spacer(modifier = Modifier.height(12.dp))
-            Text("Background Theme", color = TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            Text("Couleur ou dégradé de fond", color = TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
             Spacer(modifier = Modifier.height(6.dp))
 
             val currentFill = if (project.backgroundGradient != null) {
@@ -82,8 +82,8 @@ fun BackgroundStudioPanel(
             }
 
             LuxuryColorPicker(
-                currentFill = currentFill,
-                onFillChanged = { fill ->
+                fill = currentFill,
+                onFillChange = { fill ->
                     if (fill.isGradient && fill.gradient != null) {
                         onUpdateProject(project.copy(backgroundGradient = fill.gradient))
                     } else {
@@ -94,7 +94,7 @@ fun BackgroundStudioPanel(
         }
 
         Spacer(modifier = Modifier.height(16.dp))
-        Text("Canvas Ratio Preset", color = TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+        Text("Formats & Ratios Prédéfinis", color = TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(8.dp))
 
         Row(

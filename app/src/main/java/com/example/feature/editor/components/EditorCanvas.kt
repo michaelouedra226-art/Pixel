@@ -3,9 +3,12 @@ package com.example.feature.editor.components
 import android.graphics.Bitmap
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculateCentroid
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateRotation
+import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -23,16 +26,16 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
-import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.input.pointer.positionChange
 import com.example.core.common.MathUtil
 import com.example.core.engine.model.AnchorPoint
 import com.example.core.engine.model.BezierLayer
 import com.example.core.engine.model.CanvasProject
-import com.example.core.engine.model.DrawingLayer
 import com.example.core.engine.model.DrawingPoint
 import com.example.core.engine.model.DrawingStroke
 import com.example.core.engine.model.Layer
@@ -42,11 +45,13 @@ import com.example.core.engine.snap.MagneticSnapEngine
 import com.example.core.engine.snap.SnapGuideLine
 import com.example.ui.theme.ChampagneGold
 import com.example.ui.theme.ObsidianBg
-import kotlin.math.abs
+import kotlin.math.PI
+import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sin
+import kotlin.math.sqrt
 
 enum class ActiveTool {
     SELECT,
@@ -66,6 +71,10 @@ enum class HandleType {
     TOP_RIGHT,
     BOTTOM_LEFT,
     BOTTOM_RIGHT,
+    TOP_CENTER,
+    BOTTOM_CENTER,
+    LEFT_CENTER,
+    RIGHT_CENTER,
     ROTATE
 }
 
@@ -93,12 +102,7 @@ fun EditorCanvas(
     var zoom by remember { mutableFloatStateOf(1f) }
     var panOffset by remember { mutableStateOf(Offset.Zero) }
 
-    var activeHandle by remember { mutableStateOf(HandleType.NONE) }
-    var initialTouchPoint by remember { mutableStateOf(Offset.Zero) }
-    var initialTransform by remember { mutableStateOf<Transform?>(null) }
     var activeGuideLines by remember { mutableStateOf<List<SnapGuideLine>>(emptyList()) }
-
-    // Drawing in progress points
     val currentDrawingPoints = remember { mutableStateListOf<DrawingPoint>() }
 
     val selectedLayer = project.layers.find { it.id == selectedLayerId }
@@ -107,144 +111,41 @@ fun EditorCanvas(
         modifier = modifier
             .fillMaxSize()
             .background(ObsidianBg)
-            .pointerInput(activeTool) {
-                if (activeTool == ActiveTool.SELECT || activeTool == ActiveTool.TEXT || activeTool == ActiveTool.SHAPES || activeTool == ActiveTool.BACKGROUND) {
-                    detectTransformGestures { _, pan, gestureZoom, _ ->
-                        zoom = (zoom * gestureZoom).coerceIn(0.2f, 6f)
-                        panOffset += pan
+            .pointerInput(project, selectedLayerId, activeTool, isSnapEnabled, zoom, panOffset) {
+                awaitEachGesture {
+                    val firstDown = awaitFirstDown(requireUnconsumed = false)
+                    var downTime = System.currentTimeMillis()
+                    var hasMoved = false
+
+                    // Convert first touch to canvas coordinates
+                    val canvasW = project.width.toFloat()
+                    val canvasH = project.height.toFloat()
+                    val defaultOffsetX = (size.width - canvasW * zoom) / 2f
+                    val defaultOffsetY = (size.height - canvasH * zoom) / 2f
+                    val totalOffsetX = defaultOffsetX + panOffset.x
+                    val totalOffsetY = defaultOffsetY + panOffset.y
+
+                    fun screenToCanvas(screenPt: Offset): Offset {
+                        return Offset(
+                            (screenPt.x - totalOffsetX) / zoom,
+                            (screenPt.y - totalOffsetY) / zoom
+                        )
                     }
-                }
-            }
-            .pointerInput(activeTool, project.layers, selectedLayerId) {
-                detectTapGestures(
-                    onDoubleTap = {
-                        // Double tap to fit / reset zoom
-                        zoom = 1f
-                        panOffset = Offset.Zero
-                    },
-                    onTap = { tapScreenOffset ->
-                        if (activeTool == ActiveTool.DRAW) return@detectTapGestures
 
-                        // Convert screen touch to canvas local coordinates
-                        val canvasX = (tapScreenOffset.x - panOffset.x) / zoom
-                        val canvasY = (tapScreenOffset.y - panOffset.y) / zoom
-                        val localTouch = Offset(canvasX, canvasY)
+                    val initialCanvasTouch = screenToCanvas(firstDown.position)
 
-                        // Check Bézier anchor tap if in Bézier mode
-                        if (activeTool == ActiveTool.BEZIER && selectedLayer is BezierLayer) {
-                            val anchorIdx = selectedLayer.anchors.indexOfFirst { anchor ->
-                                val pos = selectedLayer.transform.x + anchor.position.x
-                                val posY = selectedLayer.transform.y + anchor.position.y
-                                MathUtil.distance(localTouch, Offset(pos, posY)) < 30f / zoom
-                            }
-                            if (anchorIdx != -1) {
-                                onSelectAnchor(anchorIdx)
-                                return@detectTapGestures
-                            }
+                    if (activeTool == ActiveTool.DRAW) {
+                        currentDrawingPoints.clear()
+                        currentDrawingPoints.add(DrawingPoint(initialCanvasTouch.x, initialCanvasTouch.y))
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            val change = event.changes.firstOrNull { it.id == firstDown.id } ?: break
+                            if (!change.pressed) break
+                            change.consume()
+                            val cur = screenToCanvas(change.position)
+                            currentDrawingPoints.add(DrawingPoint(cur.x, cur.y))
                         }
-
-                        // Hit test layers in reverse z-order (topmost first)
-                        var hitLayerId: String? = null
-                        for (layer in project.layers.reversed()) {
-                            if (!layer.isVisible || layer.isLocked) continue
-                            val t = layer.transform
-                            val layerRect = Rect(t.x, t.y, t.x + t.width * t.scaleX, t.y + t.height * t.scaleY)
-                            if (layerRect.contains(localTouch)) {
-                                hitLayerId = layer.id
-                                break
-                            }
-                        }
-                        onSelectLayer(hitLayerId)
-                        onSelectAnchor(null)
-                    }
-                )
-            }
-            .pointerInput(activeTool, selectedLayerId, zoom, panOffset, isSnapEnabled) {
-                detectDragGestures(
-                    onDragStart = { startOffset ->
-                        val canvasX = (startOffset.x - panOffset.x) / zoom
-                        val canvasY = (startOffset.y - panOffset.y) / zoom
-                        initialTouchPoint = Offset(canvasX, canvasY)
-
-                        if (activeTool == ActiveTool.DRAW) {
-                            currentDrawingPoints.clear()
-                            currentDrawingPoints.add(DrawingPoint(canvasX, canvasY))
-                            return@detectDragGestures
-                        }
-
-                        if (selectedLayer != null && !selectedLayer.isLocked) {
-                            initialTransform = selectedLayer.transform
-                            val t = selectedLayer.transform
-                            val layerRect = Rect(t.x, t.y, t.x + t.width * t.scaleX, t.y + t.height * t.scaleY)
-                            val rotCenter = Offset(t.x + (t.width * t.scaleX) / 2f, t.y - 40f)
-
-                            activeHandle = when {
-                                MathUtil.distance(initialTouchPoint, rotCenter) < 28f / zoom -> HandleType.ROTATE
-                                MathUtil.distance(initialTouchPoint, Offset(t.x, t.y)) < 24f / zoom -> HandleType.TOP_LEFT
-                                MathUtil.distance(initialTouchPoint, Offset(t.x + t.width * t.scaleX, t.y)) < 24f / zoom -> HandleType.TOP_RIGHT
-                                MathUtil.distance(initialTouchPoint, Offset(t.x, t.y + t.height * t.scaleY)) < 24f / zoom -> HandleType.BOTTOM_LEFT
-                                MathUtil.distance(initialTouchPoint, Offset(t.x + t.width * t.scaleX, t.y + t.height * t.scaleY)) < 24f / zoom -> HandleType.BOTTOM_RIGHT
-                                layerRect.contains(initialTouchPoint) -> HandleType.BODY
-                                else -> HandleType.NONE
-                            }
-                        }
-                    },
-                    onDrag = { change, dragAmount ->
-                        change.consume()
-                        val canvasDragX = dragAmount.x / zoom
-                        val canvasDragY = dragAmount.y / zoom
-
-                        if (activeTool == ActiveTool.DRAW) {
-                            val cur = currentDrawingPoints.lastOrNull() ?: DrawingPoint(0f, 0f)
-                            val nextPoint = DrawingPoint(cur.x + canvasDragX, cur.y + canvasDragY)
-                            currentDrawingPoints.add(nextPoint)
-                            return@detectDragGestures
-                        }
-
-                        if (selectedLayer != null && initialTransform != null && !selectedLayer.isLocked) {
-                            val currT = selectedLayer.transform
-                            when (activeHandle) {
-                                HandleType.BODY -> {
-                                    val unSnapped = currT.copy(
-                                        x = currT.x + canvasDragX,
-                                        y = currT.y + canvasDragY
-                                    )
-                                    val snapRes = MagneticSnapEngine.snapTransform(
-                                        current = unSnapped,
-                                        canvasWidth = project.width.toFloat(),
-                                        canvasHeight = project.height.toFloat(),
-                                        otherLayers = project.layers.filter { it.id != selectedLayer.id },
-                                        snapEnabled = isSnapEnabled
-                                    )
-                                    activeGuideLines = snapRes.guideLines
-                                    onUpdateLayerTransform(selectedLayer.id, snapRes.snappedTransform)
-                                }
-                                HandleType.BOTTOM_RIGHT -> {
-                                    val newW = max(30f, currT.width + canvasDragX)
-                                    val newH = max(30f, currT.height + canvasDragY)
-                                    onUpdateLayerTransform(selectedLayer.id, currT.copy(width = newW, height = newH))
-                                }
-                                HandleType.ROTATE -> {
-                                    val center = currT.center
-                                    val currentTouch = Offset(
-                                        (change.position.x - panOffset.x) / zoom,
-                                        (change.position.y - panOffset.y) / zoom
-                                    )
-                                    val angle = MathUtil.calculateAngle(center, currentTouch)
-                                    onUpdateLayerTransform(selectedLayer.id, currT.copy(rotation = angle - 90f))
-                                }
-                                else -> {
-                                    // Other corner handles resize
-                                    val newW = max(30f, currT.width + canvasDragX)
-                                    val newH = max(30f, currT.height + canvasDragY)
-                                    onUpdateLayerTransform(selectedLayer.id, currT.copy(width = newW, height = newH))
-                                }
-                            }
-                        }
-                    },
-                    onDragEnd = {
-                        activeGuideLines = emptyList()
-                        if (activeTool == ActiveTool.DRAW && currentDrawingPoints.isNotEmpty()) {
+                        if (currentDrawingPoints.size > 1) {
                             val stroke = DrawingStroke(
                                 points = currentDrawingPoints.toList(),
                                 color = brushColor,
@@ -252,17 +153,246 @@ fun EditorCanvas(
                                 isEraser = isEraser
                             )
                             onAddDrawingStroke(stroke)
-                            currentDrawingPoints.clear()
+                        }
+                        currentDrawingPoints.clear()
+                        return@awaitEachGesture
+                    }
+
+                    // Check which handle or layer is under the touch
+                    var activeHandle = HandleType.NONE
+                    var grabbedLayer = selectedLayer
+
+                    if (selectedLayer != null && !selectedLayer.isLocked && selectedLayer.isVisible) {
+                        val t = selectedLayer.transform
+                        val center = t.center
+                        val localTouch = canvasToLocal(initialCanvasTouch, center, t.rotation)
+                        val halfW = (t.width * t.scaleX) / 2f
+                        val halfH = (t.height * t.scaleY) / 2f
+                        val touchRadius = 32f / zoom
+
+                        // Test handles in local space
+                        activeHandle = when {
+                            // Rotate stalk
+                            MathUtil.distance(localTouch, Offset(0f, -halfH - 40f / zoom)) < touchRadius -> HandleType.ROTATE
+                            // 4 Corners
+                            MathUtil.distance(localTouch, Offset(-halfW, -halfH)) < touchRadius -> HandleType.TOP_LEFT
+                            MathUtil.distance(localTouch, Offset(halfW, -halfH)) < touchRadius -> HandleType.TOP_RIGHT
+                            MathUtil.distance(localTouch, Offset(-halfW, halfH)) < touchRadius -> HandleType.BOTTOM_LEFT
+                            MathUtil.distance(localTouch, Offset(halfW, halfH)) < touchRadius -> HandleType.BOTTOM_RIGHT
+                            // 4 Edges
+                            MathUtil.distance(localTouch, Offset(0f, -halfH)) < touchRadius -> HandleType.TOP_CENTER
+                            MathUtil.distance(localTouch, Offset(0f, halfH)) < touchRadius -> HandleType.BOTTOM_CENTER
+                            MathUtil.distance(localTouch, Offset(-halfW, 0f)) < touchRadius -> HandleType.LEFT_CENTER
+                            MathUtil.distance(localTouch, Offset(halfW, 0f)) < touchRadius -> HandleType.RIGHT_CENTER
+                            // Body
+                            localTouch.x in -halfW..halfW && localTouch.y in -halfH..halfH -> HandleType.BODY
+                            else -> HandleType.NONE
                         }
                     }
-                )
+
+                    // If not on selected layer handle/body, check if we hit any other layer
+                    if (activeHandle == HandleType.NONE) {
+                        for (layer in project.layers.reversed()) {
+                            if (!layer.isVisible || layer.isLocked) continue
+                            val t = layer.transform
+                            val center = t.center
+                            val localTouch = canvasToLocal(initialCanvasTouch, center, t.rotation)
+                            val halfW = (t.width * t.scaleX) / 2f
+                            val halfH = (t.height * t.scaleY) / 2f
+                            if (localTouch.x in -halfW..halfW && localTouch.y in -halfH..halfH) {
+                                grabbedLayer = layer
+                                activeHandle = HandleType.BODY
+                                onSelectLayer(layer.id)
+                                break
+                            }
+                        }
+                    }
+
+                    var lastTransform = grabbedLayer?.transform
+
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        val canceled = event.changes.any { it.isConsumed }
+                        if (canceled) break
+
+                        val activePointers = event.changes.filter { it.pressed }
+                        if (activePointers.isEmpty()) break
+
+                        if (activePointers.size >= 2) {
+                            // Multi-touch gestures (Pinch zoom & rotate)
+                            val zoomFactor = event.calculateZoom()
+                            val pan = event.calculatePan()
+                            val rotChange = event.calculateRotation()
+
+                            if (activeHandle != HandleType.NONE && grabbedLayer != null && !grabbedLayer.isLocked) {
+                                // Rotate & scale layer directly with 2 fingers
+                                val curT = grabbedLayer.transform
+                                val newScaleX = (curT.scaleX * zoomFactor).coerceIn(0.2f, 5f)
+                                val newScaleY = (curT.scaleY * zoomFactor).coerceIn(0.2f, 5f)
+                                val newRot = (curT.rotation + rotChange) % 360f
+                                val newT = curT.copy(
+                                    x = curT.x + pan.x / zoom,
+                                    y = curT.y + pan.y / zoom,
+                                    scaleX = newScaleX,
+                                    scaleY = newScaleY,
+                                    rotation = newRot
+                                )
+                                grabbedLayer = grabbedLayer.copyWithTransform(newT)
+                                onUpdateLayerTransform(grabbedLayer.id, newT)
+                            } else {
+                                // Pan & Zoom canvas
+                                zoom = (zoom * zoomFactor).coerceIn(0.3f, 6f)
+                                panOffset += pan
+                            }
+                            hasMoved = true
+                            event.changes.forEach { it.consume() }
+                        } else if (activePointers.size == 1) {
+                            val change = activePointers[0]
+                            val dragAmount = change.positionChange()
+                            if (dragAmount.getDistance() > 2f) {
+                                hasMoved = true
+                            }
+
+                            if (hasMoved && grabbedLayer != null && !grabbedLayer.isLocked && activeHandle != HandleType.NONE) {
+                                change.consume()
+                                val curT = grabbedLayer.transform
+                                val canvasDragX = dragAmount.x / zoom
+                                val canvasDragY = dragAmount.y / zoom
+
+                                when (activeHandle) {
+                                    HandleType.BODY -> {
+                                        val unSnapped = curT.copy(
+                                            x = curT.x + canvasDragX,
+                                            y = curT.y + canvasDragY
+                                        )
+                                        val snapRes = MagneticSnapEngine.snapTransform(
+                                            current = unSnapped,
+                                            canvasWidth = project.width.toFloat(),
+                                            canvasHeight = project.height.toFloat(),
+                                            otherLayers = project.layers.filter { it.id != grabbedLayer.id },
+                                            snapEnabled = isSnapEnabled
+                                        )
+                                        activeGuideLines = snapRes.guideLines
+                                        grabbedLayer = grabbedLayer.copyWithTransform(snapRes.snappedTransform)
+                                        onUpdateLayerTransform(grabbedLayer.id, snapRes.snappedTransform)
+                                    }
+                                    HandleType.ROTATE -> {
+                                        val currentCanvasTouch = screenToCanvas(change.position)
+                                        val center = curT.center
+                                        val angleRad = atan2(
+                                            (currentCanvasTouch.y - center.y).toDouble(),
+                                            (currentCanvasTouch.x - center.x).toDouble()
+                                        )
+                                        val newAngleDeg = (Math.toDegrees(angleRad).toFloat() + 90f + 360f) % 360f
+                                        val updatedT = curT.copy(rotation = newAngleDeg)
+                                        grabbedLayer = grabbedLayer.copyWithTransform(updatedT)
+                                        onUpdateLayerTransform(grabbedLayer.id, updatedT)
+                                    }
+                                    HandleType.BOTTOM_RIGHT -> {
+                                        // Diagonal Resize
+                                        val angleRad = Math.toRadians(-curT.rotation.toDouble())
+                                        val localDragX = (canvasDragX * cos(angleRad) - canvasDragY * sin(angleRad)).toFloat()
+                                        val localDragY = (canvasDragX * sin(angleRad) + canvasDragY * cos(angleRad)).toFloat()
+                                        val newW = max(30f, curT.width + localDragX * 2)
+                                        val newH = max(30f, curT.height + localDragY * 2)
+                                        val updatedT = curT.copy(
+                                            width = newW,
+                                            height = newH,
+                                            x = curT.x - localDragX,
+                                            y = curT.y - localDragY
+                                        )
+                                        grabbedLayer = grabbedLayer.copyWithTransform(updatedT)
+                                        onUpdateLayerTransform(grabbedLayer.id, updatedT)
+                                    }
+                                    HandleType.TOP_LEFT -> {
+                                        val angleRad = Math.toRadians(-curT.rotation.toDouble())
+                                        val localDragX = (canvasDragX * cos(angleRad) - canvasDragY * sin(angleRad)).toFloat()
+                                        val localDragY = (canvasDragX * sin(angleRad) + canvasDragY * cos(angleRad)).toFloat()
+                                        val newW = max(30f, curT.width - localDragX * 2)
+                                        val newH = max(30f, curT.height - localDragY * 2)
+                                        val updatedT = curT.copy(
+                                            width = newW,
+                                            height = newH,
+                                            x = curT.x + localDragX,
+                                            y = curT.y + localDragY
+                                        )
+                                        grabbedLayer = grabbedLayer.copyWithTransform(updatedT)
+                                        onUpdateLayerTransform(grabbedLayer.id, updatedT)
+                                    }
+                                    HandleType.TOP_RIGHT -> {
+                                        val angleRad = Math.toRadians(-curT.rotation.toDouble())
+                                        val localDragX = (canvasDragX * cos(angleRad) - canvasDragY * sin(angleRad)).toFloat()
+                                        val localDragY = (canvasDragX * sin(angleRad) + canvasDragY * cos(angleRad)).toFloat()
+                                        val newW = max(30f, curT.width + localDragX * 2)
+                                        val newH = max(30f, curT.height - localDragY * 2)
+                                        val updatedT = curT.copy(
+                                            width = newW,
+                                            height = newH,
+                                            x = curT.x - localDragX,
+                                            y = curT.y + localDragY
+                                        )
+                                        grabbedLayer = grabbedLayer.copyWithTransform(updatedT)
+                                        onUpdateLayerTransform(grabbedLayer.id, updatedT)
+                                    }
+                                    HandleType.BOTTOM_LEFT -> {
+                                        val angleRad = Math.toRadians(-curT.rotation.toDouble())
+                                        val localDragX = (canvasDragX * cos(angleRad) - canvasDragY * sin(angleRad)).toFloat()
+                                        val localDragY = (canvasDragX * sin(angleRad) + canvasDragY * cos(angleRad)).toFloat()
+                                        val newW = max(30f, curT.width - localDragX * 2)
+                                        val newH = max(30f, curT.height + localDragY * 2)
+                                        val updatedT = curT.copy(
+                                            width = newW,
+                                            height = newH,
+                                            x = curT.x + localDragX,
+                                            y = curT.y - localDragY
+                                        )
+                                        grabbedLayer = grabbedLayer.copyWithTransform(updatedT)
+                                        onUpdateLayerTransform(grabbedLayer.id, updatedT)
+                                    }
+                                    HandleType.RIGHT_CENTER, HandleType.LEFT_CENTER -> {
+                                        val angleRad = Math.toRadians(-curT.rotation.toDouble())
+                                        val localDragX = (canvasDragX * cos(angleRad) - canvasDragY * sin(angleRad)).toFloat()
+                                        val newW = max(30f, curT.width + (if (activeHandle == HandleType.RIGHT_CENTER) localDragX else -localDragX) * 2)
+                                        val updatedT = curT.copy(width = newW)
+                                        grabbedLayer = grabbedLayer.copyWithTransform(updatedT)
+                                        onUpdateLayerTransform(grabbedLayer.id, updatedT)
+                                    }
+                                    HandleType.BOTTOM_CENTER, HandleType.TOP_CENTER -> {
+                                        val angleRad = Math.toRadians(-curT.rotation.toDouble())
+                                        val localDragY = (canvasDragX * sin(angleRad) + canvasDragY * cos(angleRad)).toFloat()
+                                        val newH = max(30f, curT.height + (if (activeHandle == HandleType.BOTTOM_CENTER) localDragY else -localDragY) * 2)
+                                        val updatedT = curT.copy(height = newH)
+                                        grabbedLayer = grabbedLayer.copyWithTransform(updatedT)
+                                        onUpdateLayerTransform(grabbedLayer.id, updatedT)
+                                    }
+                                    else -> {}
+                                }
+                            } else if (activeHandle == HandleType.NONE) {
+                                // Pan canvas
+                                change.consume()
+                                panOffset += dragAmount
+                            }
+                        }
+                    }
+
+                    activeGuideLines = emptyList()
+
+                    // Handle quick Tap (selection or deselect)
+                    val duration = System.currentTimeMillis() - downTime
+                    if (!hasMoved && duration < 250) {
+                        if (activeHandle == HandleType.BODY && grabbedLayer != null) {
+                            onSelectLayer(grabbedLayer.id)
+                        } else if (activeHandle == HandleType.NONE) {
+                            onSelectLayer(null)
+                        }
+                    }
+                }
             }
     ) {
         Canvas(modifier = Modifier.fillMaxSize()) {
             val canvasW = project.width.toFloat()
             val canvasH = project.height.toFloat()
 
-            // Center canvas in viewport initially
             val defaultOffsetX = (size.width - canvasW * zoom) / 2f
             val defaultOffsetY = (size.height - canvasH * zoom) / 2f
 
@@ -304,14 +434,23 @@ fun EditorCanvas(
                         )
                     }
 
-                    // 6. Transform Bounding Box for selected layer
+                    // 6. 8-Point Rotated Transform Bounding Box for selected layer
                     if (selectedLayer != null && selectedLayer.isVisible && activeTool != ActiveTool.DRAW) {
-                        drawTransformBoundingBox(selectedLayer, zoom)
+                        drawRotatedBoundingBox(selectedLayer, zoom)
                     }
                 }
             }
         }
     }
+}
+
+private fun canvasToLocal(canvasPt: Offset, center: Offset, rotationDeg: Float): Offset {
+    val rad = Math.toRadians(-rotationDeg.toDouble())
+    val dx = canvasPt.x - center.x
+    val dy = canvasPt.y - center.y
+    val lx = (dx * cos(rad) - dy * sin(rad)).toFloat()
+    val ly = (dx * sin(rad) + dy * cos(rad)).toFloat()
+    return Offset(lx, ly)
 }
 
 private fun DrawScope.drawGrid(width: Float, height: Float) {
@@ -329,54 +468,98 @@ private fun DrawScope.drawGrid(width: Float, height: Float) {
     }
 }
 
-private fun DrawScope.drawTransformBoundingBox(layer: Layer, zoom: Float) {
+private fun DrawScope.drawRotatedBoundingBox(layer: Layer, zoom: Float) {
     val t = layer.transform
-    val handleRadius = 6f / zoom
+    val handleRadius = 7f / zoom
     val boxColor = ChampagneGold
     val w = t.width * t.scaleX
     val h = t.height * t.scaleY
+    val halfW = w / 2f
+    val halfH = h / 2f
 
-    translate(left = t.x, top = t.y) {
-        // Bounding outline
-        drawRect(
-            color = boxColor,
-            topLeft = Offset.Zero,
-            size = Size(w, h),
-            style = Stroke(width = 1.5f / zoom)
-        )
+    translate(left = t.x + halfW, top = t.y + halfH) {
+        rotate(degrees = t.rotation, pivot = Offset.Zero) {
+            // Main Bounding Rectangle
+            drawRect(
+                color = boxColor,
+                topLeft = Offset(-halfW, -halfH),
+                size = Size(w, h),
+                style = Stroke(width = 1.6f / zoom)
+            )
 
-        // 4 Corner Handles
-        listOf(
-            Offset(0f, 0f),
-            Offset(w, 0f),
-            Offset(0f, h),
-            Offset(w, h)
-        ).forEach { pos ->
+            // 4 Corner Handles
+            val cornerHandles = listOf(
+                Offset(-halfW, -halfH),
+                Offset(halfW, -halfH),
+                Offset(-halfW, halfH),
+                Offset(halfW, halfH)
+            )
+
+            for (pos in cornerHandles) {
+                drawCircle(
+                    color = Color(0xFF0A0A0C),
+                    radius = handleRadius,
+                    center = pos
+                )
+                drawCircle(
+                    color = boxColor,
+                    radius = handleRadius,
+                    center = pos,
+                    style = Stroke(width = 2f / zoom)
+                )
+            }
+
+            // 4 Side Edge Handles
+            val edgeHandles = listOf(
+                Offset(0f, -halfH),
+                Offset(0f, halfH),
+                Offset(-halfW, 0f),
+                Offset(halfW, 0f)
+            )
+
+            val pillW = 14f / zoom
+            val pillH = 5f / zoom
+
+            drawRect(
+                color = boxColor,
+                topLeft = Offset(-pillW / 2f, -halfH - pillH / 2f),
+                size = Size(pillW, pillH)
+            )
+            drawRect(
+                color = boxColor,
+                topLeft = Offset(-pillW / 2f, halfH - pillH / 2f),
+                size = Size(pillW, pillH)
+            )
+            drawRect(
+                color = boxColor,
+                topLeft = Offset(-halfW - pillH / 2f, -pillW / 2f),
+                size = Size(pillH, pillW)
+            )
+            drawRect(
+                color = boxColor,
+                topLeft = Offset(halfW - pillH / 2f, -pillW / 2f),
+                size = Size(pillH, pillW)
+            )
+
+            // Top Stalk Rotation Handle
+            val rotCenter = Offset(0f, -halfH - 36f / zoom)
+            drawLine(
+                color = boxColor,
+                start = Offset(0f, -halfH),
+                end = rotCenter,
+                strokeWidth = 1.5f / zoom
+            )
             drawCircle(
                 color = Color(0xFF0A0A0C),
-                radius = handleRadius,
-                center = pos
+                radius = handleRadius * 1.3f,
+                center = rotCenter
             )
             drawCircle(
                 color = boxColor,
-                radius = handleRadius,
-                center = pos,
-                style = Stroke(width = 1.5f / zoom)
+                radius = handleRadius * 1.3f,
+                center = rotCenter,
+                style = Stroke(width = 2f / zoom)
             )
         }
-
-        // Top Rotation Handle
-        val rotCenter = Offset(w / 2f, -30f / zoom)
-        drawLine(
-            color = boxColor,
-            start = Offset(w / 2f, 0f),
-            end = rotCenter,
-            strokeWidth = 1.2f / zoom
-        )
-        drawCircle(
-            color = boxColor,
-            radius = handleRadius * 1.2f,
-            center = rotCenter
-        )
     }
 }

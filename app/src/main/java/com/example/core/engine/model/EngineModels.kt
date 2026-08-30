@@ -51,7 +51,11 @@ data class GradientDef(
 data class ColorFill(
     val solidColor: Long = 0xFFFFFFFF,
     val gradient: GradientDef? = null,
-    val isGradient: Boolean = false
+    val isGradient: Boolean = false,
+    val textureUri: String? = null,
+    val textureName: String? = null,
+    val textureScale: Float = 1f,
+    val isTexture: Boolean = false
 ) {
     companion object {
         val White = ColorFill(solidColor = 0xFFFFFFFF)
@@ -63,6 +67,14 @@ data class ColorFill(
         val Black = ColorFill(solidColor = 0xFF0A0A0C)
         val Cyan = ColorFill(solidColor = 0xFF00E5FF)
         val Crimson = ColorFill(solidColor = 0xFFFF2A55)
+        val Chrome = ColorFill(
+            solidColor = 0xFFE0E0E0,
+            gradient = GradientDef(
+                colors = listOf(0xFFFFFFFF, 0xFFB0BEC5, 0xFF37474F, 0xFFECEFF1),
+                angle = 45f
+            ),
+            isGradient = true
+        )
     }
 }
 
@@ -82,6 +94,22 @@ data class InnerShadowDef(
     val dy: Float = 2f
 )
 
+data class GlowDef(
+    val isEnabled: Boolean = false,
+    val color: Long = 0xFFFFD700,
+    val radius: Float = 16f,
+    val opacity: Float = 0.8f
+)
+
+data class EmbossDef(
+    val isEnabled: Boolean = false,
+    val lightAngle: Float = 90f,
+    val intensity: Float = 50f,
+    val ambientLight: Float = 50f,
+    val specularHardness: Float = 20f,
+    val bevel: Float = 10f
+)
+
 data class StrokeDef(
     val isEnabled: Boolean = false,
     val color: Long = 0xFFD4AF37,
@@ -93,18 +121,33 @@ data class Layer3DEffect(
     val depth: Float = 12f,
     val color: Long = 0xFF6D5618,
     val lightAngle: Float = 45f,
-    val darken: Float = 0.35f
+    val darken: Float = 0.35f,
+    val isOblique: Boolean = false,
+    val obliqueAngle: Float = 45f
 )
 
 data class TextCurvature(
     val isEnabled: Boolean = false,
-    val bend: Float = 0f // -100 to 100
+    val bend: Float = 0f // -100 to 100 percentage
 )
 
 data class TextReflection(
     val isEnabled: Boolean = false,
     val opacity: Float = 0.35f,
     val distance: Float = 4f
+)
+
+data class ColorEraserDef(
+    val isEnabled: Boolean = false,
+    val targetColor: Long = 0xFFFFFFFF,
+    val tolerance: Float = 25f,
+    val smoothness: Float = 5f
+)
+
+data class MaskDef(
+    val isEnabled: Boolean = false,
+    val isInside: Boolean = true,
+    val points: List<Offset> = emptyList()
 )
 
 data class AnchorPoint(
@@ -137,7 +180,10 @@ data class Transform(
     val height: Float = 200f,
     val rotation: Float = 0f,
     val scaleX: Float = 1f,
-    val scaleY: Float = 1f
+    val scaleY: Float = 1f,
+    val rotationX: Float = 0f, // 3D tilt X (-180 to 180)
+    val rotationY: Float = 0f, // 3D tilt Y (-180 to 180)
+    val perspective: Float = 0f // Perspective depth factor
 ) {
     val center: Offset get() = Offset(x + width / 2f, y + height / 2f)
 }
@@ -163,12 +209,12 @@ sealed class Layer {
 
 data class TextLayer(
     override val id: String = UUID.randomUUID().toString(),
-    override val name: String = "Text Layer",
+    override val name: String = "Texte",
     override val isVisible: Boolean = true,
     override val isLocked: Boolean = false,
     override val opacity: Float = 1f,
     override val blendMode: BlendModeDef = BlendModeDef.SRC_OVER,
-    override val transform: Transform = Transform(x = 100f, y = 200f, width = 300f, height = 100f),
+    override val transform: Transform = Transform(x = 100f, y = 200f, width = 320f, height = 110f),
     override val zIndex: Int = 0,
     val text: String = "PIXELFORGE",
     val fontSize: Float = 42f,
@@ -183,9 +229,12 @@ data class TextLayer(
     val stroke: StrokeDef = StrokeDef(isEnabled = true, color = 0xFF0A0A0C, width = 2f),
     val shadow: ShadowDef = ShadowDef(isEnabled = true, color = 0xAA000000, radius = 8f, dx = 3f, dy = 5f),
     val innerShadow: InnerShadowDef = InnerShadowDef(),
+    val glow: GlowDef = GlowDef(),
+    val emboss: EmbossDef = EmbossDef(),
     val effect3D: Layer3DEffect = Layer3DEffect(),
     val curvature: TextCurvature = TextCurvature(),
-    val reflection: TextReflection = TextReflection()
+    val reflection: TextReflection = TextReflection(),
+    val mask: MaskDef = MaskDef()
 ) : Layer() {
     override fun copyWithTransform(transform: Transform) = copy(transform = transform)
     override fun copyWithVisibility(isVisible: Boolean) = copy(isVisible = isVisible)
@@ -198,7 +247,7 @@ data class TextLayer(
 
 data class ShapeLayer(
     override val id: String = UUID.randomUUID().toString(),
-    override val name: String = "Shape",
+    override val name: String = "Forme",
     override val isVisible: Boolean = true,
     override val isLocked: Boolean = false,
     override val opacity: Float = 1f,
@@ -212,7 +261,12 @@ data class ShapeLayer(
     val starInnerRadiusRatio: Float = 0.5f,
     val fill: ColorFill = ColorFill(solidColor = 0xFF1A1A1D, gradient = GradientDef(), isGradient = false),
     val stroke: StrokeDef = StrokeDef(isEnabled = true, color = 0xFFD4AF37, width = 3f),
-    val shadow: ShadowDef = ShadowDef(isEnabled = true, color = 0x66000000, radius = 12f, dx = 0f, dy = 6f)
+    val shadow: ShadowDef = ShadowDef(isEnabled = true, color = 0x66000000, radius = 12f, dx = 0f, dy = 6f),
+    val innerShadow: InnerShadowDef = InnerShadowDef(),
+    val glow: GlowDef = GlowDef(),
+    val emboss: EmbossDef = EmbossDef(),
+    val effect3D: Layer3DEffect = Layer3DEffect(),
+    val mask: MaskDef = MaskDef()
 ) : Layer() {
     override fun copyWithTransform(transform: Transform) = copy(transform = transform)
     override fun copyWithVisibility(isVisible: Boolean) = copy(isVisible = isVisible)
@@ -225,7 +279,7 @@ data class ShapeLayer(
 
 data class BezierLayer(
     override val id: String = UUID.randomUUID().toString(),
-    override val name: String = "Bézier Curve",
+    override val name: String = "Courbe Bézier",
     override val isVisible: Boolean = true,
     override val isLocked: Boolean = false,
     override val opacity: Float = 1f,
@@ -253,7 +307,7 @@ data class BezierLayer(
 
 data class DrawingLayer(
     override val id: String = UUID.randomUUID().toString(),
-    override val name: String = "Drawing",
+    override val name: String = "Dessin",
     override val isVisible: Boolean = true,
     override val isLocked: Boolean = false,
     override val opacity: Float = 1f,
@@ -287,7 +341,11 @@ data class ImageLayer(
     val contrast: Float = 1f,   // 0 to 2
     val saturation: Float = 1f, // 0 to 2
     val tintColor: Long? = null,
-    val shadow: ShadowDef = ShadowDef(isEnabled = true, color = 0x66000000, radius = 10f, dx = 2f, dy = 6f)
+    val stroke: StrokeDef = StrokeDef(isEnabled = false, color = 0xFFFFFFFF, width = 3f),
+    val shadow: ShadowDef = ShadowDef(isEnabled = true, color = 0x66000000, radius = 10f, dx = 2f, dy = 6f),
+    val glow: GlowDef = GlowDef(),
+    val colorEraser: ColorEraserDef = ColorEraserDef(),
+    val mask: MaskDef = MaskDef()
 ) : Layer() {
     override fun copyWithTransform(transform: Transform) = copy(transform = transform)
     override fun copyWithVisibility(isVisible: Boolean) = copy(isVisible = isVisible)
@@ -300,7 +358,7 @@ data class ImageLayer(
 
 data class CanvasProject(
     val id: String = UUID.randomUUID().toString(),
-    val title: String = "Untitled Artwork",
+    val title: String = "Nouveau Projet",
     val width: Int = 1080,
     val height: Int = 1080,
     val backgroundColor: Long = 0xFF0A0A0C,

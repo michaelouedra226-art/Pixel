@@ -217,14 +217,19 @@ fun LuxuryIconButton(
 
 @Composable
 fun LuxurySliderRow(
-    title: String,
-    value: Float,
-    onValueChange: (Float) -> Unit,
-    valueRange: ClosedFloatingPointRange<Float>,
+    label: String = "",
+    value: Float = 0f,
+    onValueChange: (Float) -> Unit = {},
+    valueRange: ClosedFloatingPointRange<Float> = 0f..100f,
     modifier: Modifier = Modifier,
-    valueDisplay: String = "${value.toInt()}",
+    unit: String = "",
+    title: String = label,
+    valueDisplay: String = if (unit.isNotEmpty()) "${value.toInt()} $unit" else "${value.toInt()}",
     steps: Int = 0
 ) {
+    val displayTitle = if (title.isNotEmpty()) title else label
+    val displayVal = if (valueDisplay.isNotEmpty()) valueDisplay else if (unit.isNotEmpty()) "${value.toInt()} $unit" else "${value.toInt()}"
+
     Column(modifier = modifier.fillMaxWidth().padding(vertical = 4.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -232,13 +237,13 @@ fun LuxurySliderRow(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = title,
+                text = displayTitle,
                 color = TextSecondary,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Medium
             )
             Text(
-                text = valueDisplay,
+                text = displayVal,
                 color = ChampagneGold,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold

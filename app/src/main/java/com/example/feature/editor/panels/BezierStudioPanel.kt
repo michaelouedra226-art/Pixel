@@ -52,13 +52,13 @@ fun BezierStudioPanel(
             .verticalScroll(rememberScrollState())
     ) {
         Text(
-            "Bézier Vector Node Studio",
+            "Studio Courbe Bézier Vectorielle",
             color = ChampagneGold,
             fontSize = 14.sp,
             fontWeight = FontWeight.Bold
         )
         Text(
-            "Select anchor points on canvas to drag nodes and handles",
+            "Déplacez les nœuds et les poignées sur le canevas pour sculpter votre tracé",
             color = TextSecondary,
             fontSize = 11.sp
         )
@@ -70,7 +70,7 @@ fun BezierStudioPanel(
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             LuxuryButton(
-                text = "Add Node",
+                text = "Ajouter Nœud",
                 icon = Icons.Default.Add,
                 onClick = {
                     val last = layer.anchors.lastOrNull()?.position ?: Offset(100f, 100f)
@@ -87,7 +87,7 @@ fun BezierStudioPanel(
             )
 
             LuxuryButton(
-                text = "Delete Node",
+                text = "Supprimer Nœud",
                 icon = Icons.Default.Delete,
                 isPrimary = false,
                 isEnabled = selectedAnchorIndex != null && layer.anchors.size > 2,
@@ -112,62 +112,51 @@ fun BezierStudioPanel(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("Close Path Loop", color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+            Text("Fermer le contour de la forme", color = TextPrimary, fontSize = 13.sp)
             Switch(
                 checked = layer.isClosed,
                 onCheckedChange = { onUpdate(layer.copy(isClosed = it)) },
-                colors = SwitchDefaults.colors(
-                    checkedThumbColor = ChampagneGold,
-                    checkedTrackColor = ChampagneGold.copy(alpha = 0.5f)
-                )
+                colors = SwitchDefaults.colors(checkedThumbColor = ChampagneGold)
             )
         }
 
         if (selectedAnchorIndex != null && selectedAnchorIndex in layer.anchors.indices) {
             val anchor = layer.anchors[selectedAnchorIndex]
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(10.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    "Smooth / Sharp Node",
-                    color = TextPrimary,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Medium
-                )
+                Text("Nœud courbe lissé (Bézier Smooth)", color = TextPrimary, fontSize = 13.sp)
                 Switch(
                     checked = anchor.isSmooth,
-                    onCheckedChange = { isSmooth ->
-                        val updated = layer.anchors.toMutableList()
-                        updated[selectedAnchorIndex] = anchor.copy(isSmooth = isSmooth)
+                    onCheckedChange = { smooth ->
+                        val updated = layer.anchors.mapIndexed { idx, item ->
+                            if (idx == selectedAnchorIndex) item.copy(isSmooth = smooth) else item
+                        }
                         onUpdate(layer.copy(anchors = updated))
                     },
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = ChampagneGold,
-                        checkedTrackColor = ChampagneGold.copy(alpha = 0.5f)
-                    )
+                    colors = SwitchDefaults.colors(checkedThumbColor = ChampagneGold)
                 )
             }
         }
 
-        Spacer(modifier = Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(14.dp))
+        Text("Remplissage & Contour Bézier", color = TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+        Spacer(modifier = Modifier.height(6.dp))
 
         LuxurySliderRow(
-            title = "Curve Stroke Width",
+            label = "Épaisseur du trait",
             value = layer.stroke.width,
-            onValueChange = { onUpdate(layer.copy(stroke = layer.stroke.copy(width = it))) },
             valueRange = 1f..30f,
-            valueDisplay = "${layer.stroke.width.toInt()} px"
+            unit = "px",
+            onValueChange = { onUpdate(layer.copy(stroke = layer.stroke.copy(width = it, isEnabled = true))) }
         )
 
-        Spacer(modifier = Modifier.height(10.dp))
-        Text("Stroke Color", color = TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
         LuxuryColorPicker(
-            currentFill = com.example.core.engine.model.ColorFill(solidColor = layer.stroke.color),
-            onFillChanged = { onUpdate(layer.copy(stroke = layer.stroke.copy(color = it.solidColor))) },
-            allowGradients = false
+            fill = layer.fill,
+            onFillChange = { onUpdate(layer.copy(fill = it)) }
         )
     }
 }

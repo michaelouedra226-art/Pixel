@@ -31,15 +31,24 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Redo
 import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AlignHorizontalCenter
+import androidx.compose.material.icons.filled.AlignHorizontalLeft
+import androidx.compose.material.icons.filled.AlignHorizontalRight
+import androidx.compose.material.icons.filled.AlignVerticalBottom
+import androidx.compose.material.icons.filled.AlignVerticalCenter
+import androidx.compose.material.icons.filled.AlignVerticalTop
+import androidx.compose.material.icons.filled.AspectRatio
 import androidx.compose.material.icons.filled.Brush
 import androidx.compose.material.icons.filled.Category
-import androidx.compose.material.icons.filled.Crop
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.GridOn
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.NearMe
+import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material.icons.filled.Wallpaper
@@ -70,9 +79,7 @@ import com.example.core.engine.model.ImageLayer
 import com.example.core.engine.model.ShapeLayer
 import com.example.core.engine.model.ShapeType
 import com.example.core.engine.model.TextLayer
-import com.example.core.ui.GlassCard
 import com.example.core.ui.LuxuryButton
-import com.example.core.ui.LuxuryIconButton
 import com.example.feature.editor.components.ActiveTool
 import com.example.feature.editor.components.EditorCanvas
 import com.example.feature.editor.panels.BackgroundStudioPanel
@@ -90,7 +97,6 @@ import com.example.ui.theme.ObsidianBg
 import com.example.ui.theme.SurfaceCard
 import com.example.ui.theme.SurfaceDark
 import com.example.ui.theme.SurfaceElevated
-import com.example.ui.theme.SurfaceGlass
 import com.example.ui.theme.TextMuted
 import com.example.ui.theme.TextPrimary
 import com.example.ui.theme.TextSecondary
@@ -124,7 +130,7 @@ fun EditorScreen(
                     Toast.makeText(context, effect.message, Toast.LENGTH_SHORT).show()
                 }
                 is EditorSideEffect.ExportFinished -> {
-                    Toast.makeText(context, "Exported successfully!", Toast.LENGTH_LONG).show()
+                    Toast.makeText(context, "Exportation réussie !", Toast.LENGTH_LONG).show()
                 }
             }
         }
@@ -154,7 +160,7 @@ fun EditorScreen(
                         IconButton(onClick = onNavigateBack, modifier = Modifier.size(36.dp)) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Back",
+                                contentDescription = "Retour",
                                 tint = ChampagneGold
                             )
                         }
@@ -189,7 +195,7 @@ fun EditorScreen(
                         ) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.Undo,
-                                contentDescription = "Undo",
+                                contentDescription = "Annuler",
                                 tint = if (uiState.canUndo) TextPrimary else TextMuted.copy(alpha = 0.4f)
                             )
                         }
@@ -201,7 +207,7 @@ fun EditorScreen(
                         ) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.Redo,
-                                contentDescription = "Redo",
+                                contentDescription = "Rétablir",
                                 tint = if (uiState.canRedo) TextPrimary else TextMuted.copy(alpha = 0.4f)
                             )
                         }
@@ -213,7 +219,7 @@ fun EditorScreen(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.GridOn,
-                                contentDescription = "Grid",
+                                contentDescription = "Grille",
                                 tint = if (uiState.isGridEnabled) ChampagneGold else TextSecondary
                             )
                         }
@@ -225,14 +231,14 @@ fun EditorScreen(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Save,
-                                contentDescription = "Save",
+                                contentDescription = "Enregistrer",
                                 tint = TextPrimary
                             )
                         }
 
                         // Export Button
                         LuxuryButton(
-                            text = "Export",
+                            text = "Exporter",
                             icon = Icons.Default.Download,
                             onClick = { showExportDialog = true },
                             modifier = Modifier.height(36.dp)
@@ -258,7 +264,7 @@ fun EditorScreen(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(280.dp)
+                            .height(290.dp)
                             .border(1.dp, BorderGlass)
                     ) {
                         when (uiState.activeTool) {
@@ -270,9 +276,9 @@ fun EditorScreen(
                                     )
                                 } else {
                                     EmptyToolSelectionState(
-                                        title = "Text Studio",
-                                        subtitle = "Add a new text layer or tap existing text to edit",
-                                        actionText = "Add New Text",
+                                        title = "Studio Texte & Typographie",
+                                        subtitle = "Ajoutez un calque de texte ou touchez un texte existant",
+                                        actionText = "Ajouter un Texte",
                                         onAction = { viewModel.processIntent(EditorIntent.AddTextLayer) }
                                     )
                                 }
@@ -286,9 +292,9 @@ fun EditorScreen(
                                     )
                                 } else {
                                     EmptyToolSelectionState(
-                                        title = "Geometric Shapes",
-                                        subtitle = "Create professional geometric forms and vector shapes",
-                                        actionText = "Insert Rounded Rect",
+                                        title = "Formes Géométriques",
+                                        subtitle = "Insérez des formes vectorielles précises et personnalisables",
+                                        actionText = "Insérer Rectangle Arrondi",
                                         onAction = { viewModel.processIntent(EditorIntent.AddShapeLayer(ShapeType.ROUNDED_RECT)) }
                                     )
                                 }
@@ -303,9 +309,9 @@ fun EditorScreen(
                                     )
                                 } else {
                                     EmptyToolSelectionState(
-                                        title = "Bézier Vector Studio",
-                                        subtitle = "Select a shape layer or convert it to Bézier curves",
-                                        actionText = "Create Star Curve",
+                                        title = "Studio Courbe Bézier Vectorielle",
+                                        subtitle = "Sélectionnez une forme ou convertissez-la en nœuds Bézier",
+                                        actionText = "Créer Étoile Vectorielle",
                                         onAction = { viewModel.processIntent(EditorIntent.AddShapeLayer(ShapeType.STAR)) }
                                     )
                                 }
@@ -356,6 +362,9 @@ fun EditorScreen(
                                     onBlendModeChange = { id, mode ->
                                         val l = uiState.project.layers.find { it.id == id }
                                         if (l != null) viewModel.processIntent(EditorIntent.UpdateLayer(l.copyWithBlendMode(mode)))
+                                    },
+                                    onMergeLayers = { ids ->
+                                        viewModel.processIntent(EditorIntent.MergeLayers(ids))
                                     }
                                 )
                             }
@@ -381,13 +390,13 @@ fun EditorScreen(
                 ) {
                     StudioToolItem(
                         icon = Icons.Default.NearMe,
-                        label = "Move",
+                        label = "Sélection",
                         isSelected = uiState.activeTool == ActiveTool.SELECT,
                         onClick = { viewModel.processIntent(EditorIntent.SelectTool(ActiveTool.SELECT)) }
                     )
                     StudioToolItem(
                         icon = Icons.Default.TextFields,
-                        label = "Text",
+                        label = "Texte",
                         isSelected = uiState.activeTool == ActiveTool.TEXT,
                         onClick = {
                             if (selectedLayer !is TextLayer) viewModel.processIntent(EditorIntent.AddTextLayer)
@@ -396,7 +405,7 @@ fun EditorScreen(
                     )
                     StudioToolItem(
                         icon = Icons.Default.Category,
-                        label = "Shapes",
+                        label = "Formes",
                         isSelected = uiState.activeTool == ActiveTool.SHAPES,
                         onClick = { viewModel.processIntent(EditorIntent.SelectTool(ActiveTool.SHAPES)) }
                     )
@@ -408,7 +417,7 @@ fun EditorScreen(
                     )
                     StudioToolItem(
                         icon = Icons.Default.Brush,
-                        label = "Draw",
+                        label = "Dessin",
                         isSelected = uiState.activeTool == ActiveTool.DRAW,
                         onClick = { viewModel.processIntent(EditorIntent.SelectTool(ActiveTool.DRAW)) }
                     )
@@ -420,13 +429,13 @@ fun EditorScreen(
                     )
                     StudioToolItem(
                         icon = Icons.Default.Layers,
-                        label = "Layers",
+                        label = "Calques",
                         isSelected = uiState.activeTool == ActiveTool.LAYERS,
                         onClick = { viewModel.processIntent(EditorIntent.SelectTool(ActiveTool.LAYERS)) }
                     )
                     StudioToolItem(
                         icon = Icons.Default.Wallpaper,
-                        label = "Canvas",
+                        label = "Fond",
                         isSelected = uiState.activeTool == ActiveTool.BACKGROUND,
                         onClick = { viewModel.processIntent(EditorIntent.SelectTool(ActiveTool.BACKGROUND)) }
                     )
@@ -461,6 +470,85 @@ fun EditorScreen(
                 onDuplicateSelectedLayer = { viewModel.processIntent(EditorIntent.DuplicateSelectedLayer) },
                 bitmapCache = uiState.bitmapCache
             )
+
+            // PixelLab Floating Quick Alignment Bar (Appears when a layer is selected)
+            if (selectedLayer != null) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = 10.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(SurfaceDark.copy(alpha = 0.92f))
+                        .border(1.dp, BorderGold, RoundedCornerShape(16.dp))
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(
+                            onClick = { viewModel.processIntent(EditorIntent.AlignSelected(LayerAlignment.CENTER_HORIZONTAL)) },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(Icons.Default.AlignHorizontalCenter, contentDescription = "Centrer Horizontalement", tint = ChampagneGold, modifier = Modifier.size(18.dp))
+                        }
+                        IconButton(
+                            onClick = { viewModel.processIntent(EditorIntent.AlignSelected(LayerAlignment.CENTER_VERTICAL)) },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(Icons.Default.AlignVerticalCenter, contentDescription = "Centrer Verticalement", tint = ChampagneGold, modifier = Modifier.size(18.dp))
+                        }
+                        IconButton(
+                            onClick = { viewModel.processIntent(EditorIntent.AlignSelected(LayerAlignment.ALIGN_LEFT)) },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(Icons.Default.AlignHorizontalLeft, contentDescription = "Aligner Gauche", tint = TextSecondary, modifier = Modifier.size(18.dp))
+                        }
+                        IconButton(
+                            onClick = { viewModel.processIntent(EditorIntent.AlignSelected(LayerAlignment.ALIGN_RIGHT)) },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(Icons.Default.AlignHorizontalRight, contentDescription = "Aligner Droite", tint = TextSecondary, modifier = Modifier.size(18.dp))
+                        }
+                        IconButton(
+                            onClick = { viewModel.processIntent(EditorIntent.AlignSelected(LayerAlignment.ALIGN_TOP)) },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(Icons.Default.AlignVerticalTop, contentDescription = "Aligner Haut", tint = TextSecondary, modifier = Modifier.size(18.dp))
+                        }
+                        IconButton(
+                            onClick = { viewModel.processIntent(EditorIntent.AlignSelected(LayerAlignment.ALIGN_BOTTOM)) },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(Icons.Default.AlignVerticalBottom, contentDescription = "Aligner Bas", tint = TextSecondary, modifier = Modifier.size(18.dp))
+                        }
+                        IconButton(
+                            onClick = { viewModel.processIntent(EditorIntent.AlignSelected(LayerAlignment.FIT_CANVAS)) },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(Icons.Default.AspectRatio, contentDescription = "Ajuster au Canevas", tint = TextSecondary, modifier = Modifier.size(18.dp))
+                        }
+                        IconButton(
+                            onClick = { viewModel.processIntent(EditorIntent.AlignSelected(LayerAlignment.RESET_TRANSFORMS)) },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(Icons.Default.RestartAlt, contentDescription = "Réinitialiser Rotations", tint = ChampagneGold, modifier = Modifier.size(18.dp))
+                        }
+                        IconButton(
+                            onClick = { viewModel.processIntent(EditorIntent.DuplicateSelectedLayer) },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(Icons.Default.ContentCopy, contentDescription = "Dupliquer", tint = TextSecondary, modifier = Modifier.size(18.dp))
+                        }
+                        IconButton(
+                            onClick = { viewModel.processIntent(EditorIntent.DeleteSelectedLayer) },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(Icons.Default.Delete, contentDescription = "Supprimer", tint = Color(0xFFFF453A), modifier = Modifier.size(18.dp))
+                        }
+                    }
+                }
+            }
         }
     }
 

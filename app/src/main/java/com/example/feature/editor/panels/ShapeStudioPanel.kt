@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -32,6 +31,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.core.data.repository.TextureLibrary
 import com.example.core.engine.model.ColorFill
 import com.example.core.engine.model.ShapeLayer
 import com.example.core.engine.model.ShapeType
@@ -54,17 +54,17 @@ fun ShapeStudioPanel(
     modifier: Modifier = Modifier
 ) {
     var subTab by remember { mutableIntStateOf(0) }
-    val tabs = listOf("Shape Type", "Fill Color", "Stroke & Shadow")
+    val tabs = listOf("Formes", "Couleur & Texture", "Contour & Ombres", "3D & Biseau")
 
     val shapeTypes = listOf(
-        ShapeType.ROUNDED_RECT to "Rounded",
+        ShapeType.ROUNDED_RECT to "Coins arrondis",
         ShapeType.RECTANGLE to "Rectangle",
-        ShapeType.CIRCLE to "Circle",
-        ShapeType.STAR to "Star",
-        ShapeType.POLYGON to "Polygon",
-        ShapeType.HEART to "Heart",
-        ShapeType.ARROW to "Arrow",
-        ShapeType.LINE to "Line"
+        ShapeType.CIRCLE to "Cercle",
+        ShapeType.STAR to "Étoile",
+        ShapeType.POLYGON to "Polygone",
+        ShapeType.HEART to "Cœur",
+        ShapeType.ARROW to "Flèche",
+        ShapeType.LINE to "Ligne"
     )
 
     Column(
@@ -104,7 +104,7 @@ fun ShapeStudioPanel(
 
         when (subTab) {
             0 -> {
-                Text("Select Geometric Form", color = TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Text("Sélectionnez la forme géométrique", color = TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(8.dp))
 
                 Row(
@@ -137,88 +137,250 @@ fun ShapeStudioPanel(
 
                 if (layer.shapeType == ShapeType.ROUNDED_RECT) {
                     LuxurySliderRow(
-                        title = "Corner Radius",
+                        label = "Rayon des coins",
                         value = layer.cornerRadius,
-                        onValueChange = { onUpdate(layer.copy(cornerRadius = it)) },
                         valueRange = 0f..100f,
-                        valueDisplay = "${layer.cornerRadius.toInt()} dp"
-                    )
-                } else if (layer.shapeType == ShapeType.POLYGON) {
-                    LuxurySliderRow(
-                        title = "Polygon Sides",
-                        value = layer.polygonSides.toFloat(),
-                        onValueChange = { onUpdate(layer.copy(polygonSides = it.toInt())) },
-                        valueRange = 3f..12f,
-                        valueDisplay = "${layer.polygonSides}",
-                        steps = 8
-                    )
-                } else if (layer.shapeType == ShapeType.STAR) {
-                    LuxurySliderRow(
-                        title = "Star Points",
-                        value = layer.starPoints.toFloat(),
-                        onValueChange = { onUpdate(layer.copy(starPoints = it.toInt())) },
-                        valueRange = 3f..12f,
-                        valueDisplay = "${layer.starPoints}",
-                        steps = 8
-                    )
-                    LuxurySliderRow(
-                        title = "Inner Radius Ratio",
-                        value = layer.starInnerRadiusRatio,
-                        onValueChange = { onUpdate(layer.copy(starInnerRadiusRatio = it)) },
-                        valueRange = 0.2f..0.8f,
-                        valueDisplay = "${(layer.starInnerRadiusRatio * 100).toInt()}%"
+                        unit = "px",
+                        onValueChange = { onUpdate(layer.copy(cornerRadius = it)) }
                     )
                 }
 
+                if (layer.shapeType == ShapeType.POLYGON) {
+                    LuxurySliderRow(
+                        label = "Nombre de côtés",
+                        value = layer.polygonSides.toFloat(),
+                        valueRange = 3f..12f,
+                        unit = "",
+                        onValueChange = { onUpdate(layer.copy(polygonSides = it.toInt())) }
+                    )
+                }
+
+                if (layer.shapeType == ShapeType.STAR) {
+                    LuxurySliderRow(
+                        label = "Branches de l'étoile",
+                        value = layer.starPoints.toFloat(),
+                        valueRange = 3f..12f,
+                        unit = "",
+                        onValueChange = { onUpdate(layer.copy(starPoints = it.toInt())) }
+                    )
+                    LuxurySliderRow(
+                        label = "Rayon intérieur",
+                        value = layer.starInnerRadiusRatio * 100f,
+                        valueRange = 10f..90f,
+                        unit = "%",
+                        onValueChange = { onUpdate(layer.copy(starInnerRadiusRatio = it / 100f)) }
+                    )
+                }
+
+                LuxurySliderRow(
+                    label = "Opacité",
+                    value = layer.opacity * 100f,
+                    valueRange = 0f..100f,
+                    unit = "%",
+                    onValueChange = { onUpdate(layer.copy(opacity = it / 100f)) }
+                )
+
                 Spacer(modifier = Modifier.height(14.dp))
+
                 LuxuryButton(
-                    text = "Convert to Editable Bézier",
+                    text = "Convertir en Courbe Bézier modifiable",
                     onClick = onConvertToPath,
-                    isPrimary = false,
                     modifier = Modifier.fillMaxWidth()
                 )
             }
+
             1 -> {
-                Text("Shape Fill", color = TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                Spacer(modifier = Modifier.height(6.dp))
+                // Fill & Texture
+                Text("Texture & Matériaux de luxe", color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    TextureLibrary.textures.forEach { tex ->
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(Color(tex.primaryColor))
+                                .border(1.dp, ChampagneGold, RoundedCornerShape(10.dp))
+                                .clickable {
+                                    onUpdate(
+                                        layer.copy(
+                                            fill = ColorFill(
+                                                solidColor = tex.primaryColor,
+                                                gradient = tex.gradient,
+                                                isGradient = true,
+                                                textureName = tex.name
+                                            )
+                                        )
+                                    )
+                                }
+                                .padding(horizontal = 14.dp, vertical = 10.dp)
+                        ) {
+                            Text(
+                                text = tex.name,
+                                color = Color.White,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
                 LuxuryColorPicker(
-                    currentFill = layer.fill,
-                    onFillChanged = { onUpdate(layer.copy(fill = it)) }
+                    fill = layer.fill,
+                    onFillChange = { onUpdate(layer.copy(fill = it)) }
                 )
             }
+
             2 -> {
-                // Stroke
+                // Stroke & Shadows
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("Border Stroke", color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    Text("Contour (Stroke)", color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                     Switch(
                         checked = layer.stroke.isEnabled,
                         onCheckedChange = { onUpdate(layer.copy(stroke = layer.stroke.copy(isEnabled = it))) },
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = ChampagneGold,
-                            checkedTrackColor = ChampagneGold.copy(alpha = 0.5f)
-                        )
+                        colors = SwitchDefaults.colors(checkedThumbColor = ObsidianBg, checkedTrackColor = ChampagneGold)
                     )
                 }
 
                 AnimatedVisibility(visible = layer.stroke.isEnabled) {
                     Column {
                         LuxurySliderRow(
-                            title = "Stroke Width",
+                            label = "Épaisseur du contour",
                             value = layer.stroke.width,
-                            onValueChange = { onUpdate(layer.copy(stroke = layer.stroke.copy(width = it))) },
-                            valueRange = 1f..40f,
-                            valueDisplay = "${layer.stroke.width.toInt()} px"
+                            valueRange = 1f..30f,
+                            unit = "px",
+                            onValueChange = { onUpdate(layer.copy(stroke = layer.stroke.copy(width = it))) }
                         )
                         LuxuryColorPicker(
-                            currentFill = ColorFill(solidColor = layer.stroke.color),
-                            onFillChanged = { onUpdate(layer.copy(stroke = layer.stroke.copy(color = it.solidColor))) },
-                            allowGradients = false
+                            fill = ColorFill(solidColor = layer.stroke.color),
+                            onFillChange = { onUpdate(layer.copy(stroke = layer.stroke.copy(color = it.solidColor))) }
                         )
                     }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Shadow
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Ombre portée (Shadow)", color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    Switch(
+                        checked = layer.shadow.isEnabled,
+                        onCheckedChange = { onUpdate(layer.copy(shadow = layer.shadow.copy(isEnabled = it))) },
+                        colors = SwitchDefaults.colors(checkedThumbColor = ObsidianBg, checkedTrackColor = ChampagneGold)
+                    )
+                }
+
+                AnimatedVisibility(visible = layer.shadow.isEnabled) {
+                    Column {
+                        LuxurySliderRow(
+                            label = "Rayon de flou",
+                            value = layer.shadow.radius,
+                            valueRange = 0f..40f,
+                            unit = "px",
+                            onValueChange = { onUpdate(layer.copy(shadow = layer.shadow.copy(radius = it))) }
+                        )
+                        LuxurySliderRow(
+                            label = "Décalage Y",
+                            value = layer.shadow.dy,
+                            valueRange = -30f..30f,
+                            unit = "px",
+                            onValueChange = { onUpdate(layer.copy(shadow = layer.shadow.copy(dy = it))) }
+                        )
+                    }
+                }
+            }
+
+            3 -> {
+                // 3D, Relief & Tilt
+                Text("Rotation 3D (Inclinaison spatiale)", color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                LuxurySliderRow(
+                    label = "Inclinaison Axe X (Haut / Bas)",
+                    value = layer.transform.rotationX,
+                    valueRange = -70f..70f,
+                    unit = "°",
+                    onValueChange = { onUpdate(layer.copy(transform = layer.transform.copy(rotationX = it))) }
+                )
+                LuxurySliderRow(
+                    label = "Inclinaison Axe Y (Gauche / Droite)",
+                    value = layer.transform.rotationY,
+                    valueRange = -70f..70f,
+                    unit = "°",
+                    onValueChange = { onUpdate(layer.copy(transform = layer.transform.copy(rotationY = it))) }
+                )
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // 3D Extrusion
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Extrusion 3D", color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    Switch(
+                        checked = layer.effect3D.isEnabled,
+                        onCheckedChange = { onUpdate(layer.copy(effect3D = layer.effect3D.copy(isEnabled = it))) },
+                        colors = SwitchDefaults.colors(checkedThumbColor = ObsidianBg, checkedTrackColor = ChampagneGold)
+                    )
+                }
+
+                AnimatedVisibility(visible = layer.effect3D.isEnabled) {
+                    Column {
+                        LuxurySliderRow(
+                            label = "Profondeur 3D",
+                            value = layer.effect3D.depth,
+                            valueRange = 1f..40f,
+                            unit = "px",
+                            onValueChange = { onUpdate(layer.copy(effect3D = layer.effect3D.copy(depth = it))) }
+                        )
+                        LuxurySliderRow(
+                            label = "Angle de lumière",
+                            value = layer.effect3D.lightAngle,
+                            valueRange = 0f..360f,
+                            unit = "°",
+                            onValueChange = { onUpdate(layer.copy(effect3D = layer.effect3D.copy(lightAngle = it))) }
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Biseau (Emboss)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Biseau & Relief (Emboss)", color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    Switch(
+                        checked = layer.emboss.isEnabled,
+                        onCheckedChange = { onUpdate(layer.copy(emboss = layer.emboss.copy(isEnabled = it))) },
+                        colors = SwitchDefaults.colors(checkedThumbColor = ObsidianBg, checkedTrackColor = ChampagneGold)
+                    )
+                }
+
+                AnimatedVisibility(visible = layer.emboss.isEnabled) {
+                    LuxurySliderRow(
+                        label = "Intensité du reflet",
+                        value = layer.emboss.intensity,
+                        valueRange = 0f..100f,
+                        unit = "%",
+                        onValueChange = { onUpdate(layer.copy(emboss = layer.emboss.copy(intensity = it))) }
+                    )
                 }
             }
         }

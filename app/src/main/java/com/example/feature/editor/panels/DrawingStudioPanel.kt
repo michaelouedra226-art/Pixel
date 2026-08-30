@@ -14,15 +14,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Brush
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableLongStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -34,7 +27,6 @@ import com.example.core.ui.LuxuryColorPicker
 import com.example.core.ui.LuxurySliderRow
 import com.example.ui.theme.ChampagneGold
 import com.example.ui.theme.SurfaceDark
-import com.example.ui.theme.TextPrimary
 import com.example.ui.theme.TextSecondary
 
 @Composable
@@ -56,8 +48,8 @@ fun DrawingStudioPanel(
             .padding(14.dp)
             .verticalScroll(rememberScrollState())
     ) {
-        Text("Freehand Drawing Studio", color = ChampagneGold, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-        Text("Draw with vector smoothing directly on canvas", color = TextSecondary, fontSize = 11.sp)
+        Text("Atelier Dessin à Main Levée", color = ChampagneGold, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+        Text("Dessinez et esquissez directement sur le canevas avec lissage dynamique", color = TextSecondary, fontSize = 11.sp)
 
         Spacer(modifier = Modifier.height(12.dp))
 
@@ -66,7 +58,7 @@ fun DrawingStudioPanel(
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             LuxuryButton(
-                text = "Brush Mode",
+                text = "Pinceau",
                 icon = Icons.Default.Brush,
                 isPrimary = !isEraser,
                 onClick = { onEraserToggle(false) },
@@ -74,7 +66,7 @@ fun DrawingStudioPanel(
             )
 
             LuxuryButton(
-                text = "Eraser Mode",
+                text = "Gomme",
                 icon = Icons.Default.Clear,
                 isPrimary = isEraser,
                 onClick = { onEraserToggle(true) },
@@ -85,35 +77,34 @@ fun DrawingStudioPanel(
         Spacer(modifier = Modifier.height(12.dp))
 
         LuxurySliderRow(
-            title = if (isEraser) "Eraser Size" else "Brush Size",
+            label = if (isEraser) "Taille de la gomme" else "Taille du pinceau",
             value = brushSize,
             onValueChange = onBrushSizeChange,
             valueRange = 2f..80f,
-            valueDisplay = "${brushSize.toInt()} px"
+            unit = "px"
         )
 
         Spacer(modifier = Modifier.height(8.dp))
 
         if (!isEraser) {
-            Text("Brush Ink Color", color = TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            Text("Couleur de l'encre", color = TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
             Spacer(modifier = Modifier.height(6.dp))
             LuxuryColorPicker(
-                currentFill = ColorFill(solidColor = brushColor),
-                onFillChanged = { onBrushColorChange(it.solidColor) },
+                fill = ColorFill(solidColor = brushColor),
+                onFillChange = { onBrushColorChange(it.solidColor) },
                 allowGradients = false
             )
         }
 
-        Spacer(modifier = Modifier.height(14.dp))
-
-        LuxuryButton(
-            text = "Clear Drawing Layer",
-            icon = Icons.Default.Delete,
-            isPrimary = false,
-            onClick = {
-                onUpdate(layer.copy(strokes = emptyList()))
-            },
-            modifier = Modifier.fillMaxWidth()
-        )
+        if (layer.strokes.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(14.dp))
+            LuxuryButton(
+                text = "Effacer tous les traits de dessin",
+                icon = Icons.Default.Delete,
+                isPrimary = false,
+                onClick = { onUpdate(layer.copy(strokes = emptyList())) },
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
     }
 }

@@ -1,5 +1,6 @@
 package com.example.feature.editor.panels
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -14,13 +15,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.CallMerge
 import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
@@ -32,10 +32,17 @@ import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -50,6 +57,7 @@ import com.example.core.engine.model.ImageLayer
 import com.example.core.engine.model.Layer
 import com.example.core.engine.model.ShapeLayer
 import com.example.core.engine.model.TextLayer
+import com.example.core.ui.LuxuryButton
 import com.example.core.ui.LuxurySliderRow
 import com.example.ui.theme.BorderGlass
 import com.example.ui.theme.BorderGold
@@ -75,10 +83,14 @@ fun LayerManagerPanel(
     onDeleteLayer: (String) -> Unit,
     onOpacityChange: (String, Float) -> Unit,
     onBlendModeChange: (String, BlendModeDef) -> Unit,
+    onMergeLayers: (List<String>) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val selectedLayer = layers.find { it.id == selectedLayerId }
     val reversedLayers = layers.reversed()
+
+    var isMergeMode by remember { mutableStateOf(false) }
+    val selectedForMerge = remember { mutableStateListOf<String>() }
 
     Column(
         modifier = modifier
@@ -100,17 +112,56 @@ fun LayerManagerPanel(
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = "Layers Stack (${layers.size})",
+                    text = "Pile des Calques (${layers.size})",
                     color = ChampagneGold,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Bold
                 )
             }
-            Text(
-                text = "Top to Bottom",
-                color = TextMuted,
-                fontSize = 11.sp
-            )
+
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(if (isMergeMode) ChampagneGold else SurfaceElevated)
+                    .clickable {
+                        isMergeMode = !isMergeMode
+                        selectedForMerge.clear()
+                    }
+                    .padding(horizontal = 10.dp, vertical = 6.dp)
+            ) {
+                Text(
+                    text = if (isMergeMode) "Annuler Fusion" else "Fusionner",
+                    color = if (isMergeMode) ObsidianBg else ChampagneGold,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+
+        if (isMergeMode) {
+            Spacer(modifier = Modifier.height(10.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "${selectedForMerge.size} calques cochés",
+                    color = TextSecondary,
+                    fontSize = 12.sp
+                )
+                if (selectedForMerge.size >= 2) {
+                    LuxuryButton(
+                        text = "Valider la fusion",
+                        icon = Icons.Default.CallMerge,
+                        onClick = {
+                            onMergeLayers(selectedForMerge.toList())
+                            isMergeMode = false
+                            selectedForMerge.clear()
+                        }
+                    )
+                }
+            }
         }
 
         Spacer(modifier = Modifier.height(10.dp))
@@ -139,136 +190,161 @@ fun LayerManagerPanel(
                         .background(if (isSelected) SurfaceCard else SurfaceElevated)
                         .border(
                             1.dp,
-                            if (isSelected) ChampagneGold else BorderGlass,
+                            if (isSelected) BorderGold else BorderGlass,
                             RoundedCornerShape(12.dp)
                         )
                         .clickable { onSelectLayer(layer.id) }
-                        .padding(horizontal = 10.dp, vertical = 8.dp)
+                        .padding(horizontal = 12.dp, vertical = 10.dp)
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Icon(
-                            imageVector = icon,
-                            contentDescription = null,
-                            tint = if (isSelected) ChampagneGold else TextSecondary,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = layer.name,
-                            color = if (isSelected) TextPrimary else TextSecondary,
-                            fontSize = 13.sp,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.weight(1f)
-                        )
-
-                        // Quick actions
-                        IconButton(
-                            onClick = { onToggleVisibility(layer.id) },
-                            modifier = Modifier.size(32.dp)
                         ) {
+                            if (isMergeMode) {
+                                Checkbox(
+                                    checked = selectedForMerge.contains(layer.id),
+                                    onCheckedChange = { checked ->
+                                        if (checked) selectedForMerge.add(layer.id)
+                                        else selectedForMerge.remove(layer.id)
+                                    },
+                                    colors = CheckboxDefaults.colors(
+                                        checkedColor = ChampagneGold,
+                                        uncheckedColor = BorderGlass,
+                                        checkmarkColor = ObsidianBg
+                                    )
+                                )
+                            }
+
                             Icon(
-                                imageVector = if (layer.isVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                                contentDescription = "Visibility",
-                                tint = if (layer.isVisible) TextPrimary else TextMuted,
-                                modifier = Modifier.size(16.dp)
+                                imageVector = icon,
+                                contentDescription = null,
+                                tint = if (isSelected) ChampagneGold else TextSecondary,
+                                modifier = Modifier.size(20.dp)
                             )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column {
+                                Text(
+                                    text = layer.name,
+                                    color = if (isSelected) TextPrimary else TextSecondary,
+                                    fontSize = 13.sp,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                )
+                                Text(
+                                    text = "Opacité ${(layer.opacity * 100).toInt()}%",
+                                    color = TextMuted,
+                                    fontSize = 10.sp
+                                )
+                            }
                         }
 
-                        IconButton(
-                            onClick = { onToggleLock(layer.id) },
-                            modifier = Modifier.size(32.dp)
-                        ) {
-                            Icon(
-                                imageVector = if (layer.isLocked) Icons.Default.Lock else Icons.Default.LockOpen,
-                                contentDescription = "Lock",
-                                tint = if (layer.isLocked) ChampagneGold else TextMuted,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-
-                        IconButton(
-                            onClick = { onMoveLayerUp(layer.id) },
-                            modifier = Modifier.size(32.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.ArrowUpward,
-                                contentDescription = "Up",
-                                tint = TextSecondary,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-
-                        IconButton(
-                            onClick = { onMoveLayerDown(layer.id) },
-                            modifier = Modifier.size(32.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.ArrowDownward,
-                                contentDescription = "Down",
-                                tint = TextSecondary,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-
-                        IconButton(
-                            onClick = { onDuplicateLayer(layer.id) },
-                            modifier = Modifier.size(32.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.ContentCopy,
-                                contentDescription = "Duplicate",
-                                tint = TextSecondary,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-
-                        IconButton(
-                            onClick = { onDeleteLayer(layer.id) },
-                            modifier = Modifier.size(32.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Delete,
-                                contentDescription = "Delete",
-                                tint = Color(0xFFFF4444),
-                                modifier = Modifier.size(16.dp)
-                            )
+                        // Actions Row
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            IconButton(
+                                onClick = { onToggleVisibility(layer.id) },
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(
+                                    imageVector = if (layer.isVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                                    contentDescription = "Visibilité",
+                                    tint = if (layer.isVisible) ChampagneGold else TextMuted,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                            IconButton(
+                                onClick = { onToggleLock(layer.id) },
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(
+                                    imageVector = if (layer.isLocked) Icons.Default.Lock else Icons.Default.LockOpen,
+                                    contentDescription = "Verrouiller",
+                                    tint = if (layer.isLocked) ChampagneGold else TextMuted,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                            IconButton(
+                                onClick = { onMoveLayerUp(layer.id) },
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.ArrowUpward,
+                                    contentDescription = "Monter",
+                                    tint = TextSecondary,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                            IconButton(
+                                onClick = { onMoveLayerDown(layer.id) },
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.ArrowDownward,
+                                    contentDescription = "Descendre",
+                                    tint = TextSecondary,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                            IconButton(
+                                onClick = { onDuplicateLayer(layer.id) },
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.ContentCopy,
+                                    contentDescription = "Dupliquer",
+                                    tint = TextSecondary,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                            IconButton(
+                                onClick = { onDeleteLayer(layer.id) },
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Delete,
+                                    contentDescription = "Supprimer",
+                                    tint = Color(0xFFFF453A),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
                         }
                     }
                 }
             }
         }
 
+        // Detailed controls for selected layer
         if (selectedLayer != null) {
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(14.dp))
             LuxurySliderRow(
-                title = "Selected Layer Opacity",
-                value = selectedLayer.opacity,
-                onValueChange = { onOpacityChange(selectedLayer.id, it) },
-                valueRange = 0.05f..1f,
-                valueDisplay = "${(selectedLayer.opacity * 100).toInt()}%"
+                label = "Opacité du calque sélectionné",
+                value = selectedLayer.opacity * 100f,
+                valueRange = 0f..100f,
+                unit = "%",
+                onValueChange = { onOpacityChange(selectedLayer.id, it / 100f) }
             )
 
             Spacer(modifier = Modifier.height(8.dp))
-            Text("Blend Mode", color = TextSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-            Spacer(modifier = Modifier.height(4.dp))
+            Text("Mode de fusion (Blend Mode)", color = TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            Spacer(modifier = Modifier.height(6.dp))
 
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                BlendModeDef.values().forEach { mode ->
+                BlendModeDef.entries.forEach { mode ->
                     val isModeSelected = selectedLayer.blendMode == mode
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(8.dp))
                             .background(if (isModeSelected) ChampagneGold else SurfaceElevated)
                             .clickable { onBlendModeChange(selectedLayer.id, mode) }
-                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                            .padding(horizontal = 12.dp, vertical = 6.dp)
                     ) {
                         Text(
                             text = mode.name,

@@ -1,6 +1,5 @@
 package com.example.core.ui
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -15,7 +14,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -48,35 +46,34 @@ import com.example.ui.theme.BorderGlass
 import com.example.ui.theme.BorderGold
 import com.example.ui.theme.ChampagneGold
 import com.example.ui.theme.ObsidianBg
-import com.example.ui.theme.SurfaceCard
 import com.example.ui.theme.SurfaceDark
 import com.example.ui.theme.SurfaceElevated
-import com.example.ui.theme.TextMuted
 import com.example.ui.theme.TextPrimary
 import com.example.ui.theme.TextSecondary
 
 object LuxuryPalettes {
-    val solids = listOf(
+    val swatches = listOf(
         0xFFD4AF37, // Champagne Gold
-        0xFFF3E5AB, // Light Gold
-        0xFFE5E4E2, // Soft Platinum
-        0xFFFFFFFF, // Pure White
-        0xFF0A0A0C, // Obsidian
-        0xFF1A1A1D, // Charcoal
-        0xFFFF3366, // Crimson Red
+        0xFFE5E4E2, // Platinum White
+        0xFF0A0A0C, // Obsidian Deep Black
+        0xFF1A1A1D, // Charcoal Surface
+        0xFFFF3366, // Crimson Rose
         0xFFFF7A00, // Sunset Orange
-        0xFFFFD600, // Vivid Yellow
-        0xFF00E676, // Emerald
-        0xFF00E5FF, // Cyber Cyan
-        0xFF2979FF, // Royal Blue
-        0xFF9D4EDD, // Imperial Purple
+        0xFFFFD600, // Radiant Yellow
+        0xFF00E676, // Emerald Mint
+        0xFF00E5FF, // Electric Cyan
+        0xFF2979FF, // Royal Sapphire
+        0xFF7C4DFF, // Imperial Purple
         0xFFFF4081, // Neon Pink
-        0xFF8D6E63  // Mocha Bronze
+        0xFFFFFFFF, // Pure Snow
+        0xFF8E8E93, // Titanium Gray
+        0xFF3A3A3C, // Space Gray
+        0xFF5B450C  // Antique Bronze
     )
 
     val gradients = listOf(
-        GradientDef(GradientType.LINEAR, listOf(0xFFF3E5AB, 0xFFD4AF37, 0xFFAA820A), 45f), // Gold
-        GradientDef(GradientType.LINEAR, listOf(0xFFFFFFFF, 0xFFE5E4E2, 0xFFB0B0B5), 45f), // Platinum
+        GradientDef(GradientType.LINEAR, listOf(0xFFF3E5AB, 0xFFD4AF37, 0xFFAA820A), 45f), // Gold Deluxe
+        GradientDef(GradientType.LINEAR, listOf(0xFFE5E4E2, 0xFFFFFFFF, 0xFF9E9E9E), 90f), // Pure Chrome
         GradientDef(GradientType.LINEAR, listOf(0xFF00E5FF, 0xFF9D4EDD), 135f),            // Cyberpunk
         GradientDef(GradientType.LINEAR, listOf(0xFFFF3366, 0xFFFF7A00), 90f),             // Sunset
         GradientDef(GradientType.LINEAR, listOf(0xFF00E676, 0xFF00E5FF), 45f),             // Aurora
@@ -89,18 +86,18 @@ object LuxuryPalettes {
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun LuxuryColorPicker(
-    currentFill: ColorFill,
-    onFillChanged: (ColorFill) -> Unit,
+    fill: ColorFill = ColorFill.White,
+    onFillChange: (ColorFill) -> Unit = {},
     modifier: Modifier = Modifier,
     allowGradients: Boolean = true
 ) {
-    var selectedTab by remember { mutableIntStateOf(if (currentFill.isGradient && allowGradients) 1 else 0) }
+    var selectedTab by remember { mutableIntStateOf(if (fill.isGradient && allowGradients) 1 else 0) }
 
-    val currentColor = Color(currentFill.solidColor)
-    var red by remember(currentFill.solidColor) { mutableStateOf(currentColor.red) }
-    var green by remember(currentFill.solidColor) { mutableStateOf(currentColor.green) }
-    var blue by remember(currentFill.solidColor) { mutableStateOf(currentColor.blue) }
-    var alpha by remember(currentFill.solidColor) { mutableStateOf(currentColor.alpha) }
+    val currentColor = Color(fill.solidColor)
+    var red by remember(fill.solidColor) { mutableStateOf(currentColor.red) }
+    var green by remember(fill.solidColor) { mutableStateOf(currentColor.green) }
+    var blue by remember(fill.solidColor) { mutableStateOf(currentColor.blue) }
+    var alpha by remember(fill.solidColor) { mutableStateOf(currentColor.alpha) }
 
     Column(
         modifier = modifier
@@ -117,44 +114,54 @@ fun LuxuryColorPicker(
                 contentColor = ChampagneGold,
                 indicator = { tabPositions ->
                     TabRowDefaults.SecondaryIndicator(
-                        modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
+                        Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
                         color = ChampagneGold
                     )
                 },
                 modifier = Modifier
-                    .fillMaxWidth()
                     .clip(RoundedCornerShape(10.dp))
+                    .height(38.dp)
             ) {
                 Tab(
                     selected = selectedTab == 0,
-                    onClick = { selectedTab = 0 },
+                    onClick = {
+                        selectedTab = 0
+                        onFillChange(ColorFill(solidColor = fill.solidColor, isGradient = false))
+                    },
                     text = {
                         Text(
-                            "Solid Color",
+                            "Couleur Unie",
+                            fontSize = 12.sp,
                             fontWeight = if (selectedTab == 0) FontWeight.Bold else FontWeight.Normal,
-                            fontSize = 13.sp
+                            color = if (selectedTab == 0) ChampagneGold else TextSecondary
                         )
                     }
                 )
                 Tab(
                     selected = selectedTab == 1,
-                    onClick = { selectedTab = 1 },
+                    onClick = {
+                        selectedTab = 1
+                        val grad = fill.gradient ?: LuxuryPalettes.gradients[0]
+                        onFillChange(ColorFill(isGradient = true, gradient = grad))
+                    },
                     text = {
                         Text(
-                            "Gradient",
+                            "Dégradé",
+                            fontSize = 12.sp,
                             fontWeight = if (selectedTab == 1) FontWeight.Bold else FontWeight.Normal,
-                            fontSize = 13.sp
+                            color = if (selectedTab == 1) ChampagneGold else TextSecondary
                         )
                     }
                 )
             }
-            Spacer(modifier = Modifier.height(12.dp))
+
+            Spacer(modifier = Modifier.height(14.dp))
         }
 
         if (selectedTab == 0 || !allowGradients) {
-            // Solid palette
+            // Swatch Grid
             Text(
-                "Presets",
+                "Nuancier Pro",
                 color = TextSecondary,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
@@ -167,21 +174,20 @@ fun LuxuryColorPicker(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                LuxuryPalettes.solids.forEach { colVal ->
-                    val color = Color(colVal)
-                    val isSelected = !currentFill.isGradient && (currentFill.solidColor == colVal)
+                LuxuryPalettes.swatches.forEach { colVal ->
+                    val isSelected = !fill.isGradient && fill.solidColor == colVal
                     Box(
                         modifier = Modifier
                             .size(34.dp)
                             .clip(CircleShape)
-                            .background(color)
+                            .background(Color(colVal))
                             .border(
                                 width = if (isSelected) 2.5.dp else 1.dp,
                                 color = if (isSelected) ChampagneGold else BorderGlass,
                                 shape = CircleShape
                             )
                             .clickable {
-                                onFillChanged(ColorFill(solidColor = colVal, isGradient = false))
+                                onFillChange(ColorFill(solidColor = colVal, isGradient = false))
                             },
                         contentAlignment = Alignment.Center
                     ) {
@@ -189,7 +195,7 @@ fun LuxuryColorPicker(
                             Icon(
                                 imageVector = Icons.Default.Check,
                                 contentDescription = null,
-                                tint = if (color.luminance() > 0.5f) Color.Black else Color.White,
+                                tint = if (Color(colVal).red + Color(colVal).green + Color(colVal).blue > 1.5f) Color.Black else Color.White,
                                 modifier = Modifier.size(16.dp)
                             )
                         }
@@ -197,64 +203,56 @@ fun LuxuryColorPicker(
                 }
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
-            // RGBA Sliders
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Custom RGBA Sliders
             Text(
-                "Fine Tune",
+                "Personnaliser RVB",
                 color = TextSecondary,
                 fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 0.6.sp
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+
+            LuxurySliderRow(
+                label = "Rouge",
+                value = red * 255f,
+                valueRange = 0f..255f,
+                unit = "",
+                onValueChange = {
+                    red = it / 255f
+                    val newCol = Color(red, green, blue, alpha).toArgb().toLong()
+                    onFillChange(ColorFill(solidColor = newCol, isGradient = false))
+                }
             )
 
             LuxurySliderRow(
-                title = "Red",
-                value = red,
+                label = "Vert",
+                value = green * 255f,
+                valueRange = 0f..255f,
+                unit = "",
                 onValueChange = {
-                    red = it
-                    val updated = Color(red, green, blue, alpha).toArgb().toLong()
-                    onFillChanged(ColorFill(solidColor = updated, isGradient = false))
-                },
-                valueRange = 0f..1f,
-                valueDisplay = "${(red * 255).toInt()}"
+                    green = it / 255f
+                    val newCol = Color(red, green, blue, alpha).toArgb().toLong()
+                    onFillChange(ColorFill(solidColor = newCol, isGradient = false))
+                }
             )
+
             LuxurySliderRow(
-                title = "Green",
-                value = green,
+                label = "Bleu",
+                value = blue * 255f,
+                valueRange = 0f..255f,
+                unit = "",
                 onValueChange = {
-                    green = it
-                    val updated = Color(red, green, blue, alpha).toArgb().toLong()
-                    onFillChanged(ColorFill(solidColor = updated, isGradient = false))
-                },
-                valueRange = 0f..1f,
-                valueDisplay = "${(green * 255).toInt()}"
-            )
-            LuxurySliderRow(
-                title = "Blue",
-                value = blue,
-                onValueChange = {
-                    blue = it
-                    val updated = Color(red, green, blue, alpha).toArgb().toLong()
-                    onFillChanged(ColorFill(solidColor = updated, isGradient = false))
-                },
-                valueRange = 0f..1f,
-                valueDisplay = "${(blue * 255).toInt()}"
-            )
-            LuxurySliderRow(
-                title = "Opacity (Alpha)",
-                value = alpha,
-                onValueChange = {
-                    alpha = it
-                    val updated = Color(red, green, blue, alpha).toArgb().toLong()
-                    onFillChanged(ColorFill(solidColor = updated, isGradient = false))
-                },
-                valueRange = 0f..1f,
-                valueDisplay = "${(alpha * 100).toInt()}%"
+                    blue = it / 255f
+                    val newCol = Color(red, green, blue, alpha).toArgb().toLong()
+                    onFillChange(ColorFill(solidColor = newCol, isGradient = false))
+                }
             )
         } else {
             // Gradient presets
             Text(
-                "Luxury Gradients",
+                "Styles de Dégradés",
                 color = TextSecondary,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
@@ -267,21 +265,20 @@ fun LuxuryColorPicker(
                 verticalArrangement = Arrangement.spacedBy(10.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                LuxuryPalettes.gradients.forEach { grad ->
-                    val brush = Brush.linearGradient(grad.colors.map { Color(it) })
-                    val isSelected = currentFill.isGradient && currentFill.gradient?.colors == grad.colors
+                LuxuryPalettes.gradients.forEach { gradDef ->
+                    val isSelected = fill.isGradient && fill.gradient == gradDef
                     Box(
                         modifier = Modifier
-                            .size(width = 68.dp, height = 36.dp)
+                            .size(width = 65.dp, height = 36.dp)
                             .clip(RoundedCornerShape(8.dp))
-                            .background(brush)
+                            .background(Brush.linearGradient(gradDef.colors.map { Color(it) }))
                             .border(
                                 width = if (isSelected) 2.dp else 1.dp,
                                 color = if (isSelected) ChampagneGold else BorderGlass,
                                 shape = RoundedCornerShape(8.dp)
                             )
                             .clickable {
-                                onFillChanged(ColorFill(gradient = grad, isGradient = true))
+                                onFillChange(ColorFill(isGradient = true, gradient = gradDef))
                             },
                         contentAlignment = Alignment.Center
                     ) {
@@ -297,22 +294,22 @@ fun LuxuryColorPicker(
                 }
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
-            val currentGrad = currentFill.gradient ?: LuxuryPalettes.gradients[0]
-            LuxurySliderRow(
-                title = "Gradient Angle",
-                value = currentGrad.angle,
-                onValueChange = { angle ->
-                    val updated = currentGrad.copy(angle = angle)
-                    onFillChanged(ColorFill(gradient = updated, isGradient = true))
-                },
-                valueRange = 0f..360f,
-                valueDisplay = "${currentGrad.angle.toInt()}°"
-            )
+            if (fill.isGradient && fill.gradient != null) {
+                Spacer(modifier = Modifier.height(14.dp))
+                LuxurySliderRow(
+                    label = "Angle du dégradé",
+                    value = fill.gradient.angle,
+                    valueRange = 0f..360f,
+                    unit = "°",
+                    onValueChange = {
+                        onFillChange(
+                            fill.copy(
+                                gradient = fill.gradient.copy(angle = it)
+                            )
+                        )
+                    }
+                )
+            }
         }
     }
-}
-
-private fun Color.luminance(): Float {
-    return 0.299f * red + 0.587f * green + 0.114f * blue
 }

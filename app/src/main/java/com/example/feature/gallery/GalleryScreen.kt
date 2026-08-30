@@ -44,7 +44,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -55,17 +54,11 @@ import com.example.core.data.repository.PresetLibrary
 import com.example.core.data.repository.ProjectPreset
 import com.example.core.engine.model.CanvasProject
 import com.example.core.ui.GlassCard
-import com.example.core.ui.LuxuryButton
 import com.example.ui.theme.BorderGlass
 import com.example.ui.theme.BorderGold
 import com.example.ui.theme.ChampagneGold
-import com.example.ui.theme.GoldGradient
 import com.example.ui.theme.ObsidianBg
-import com.example.ui.theme.SoftPlatinum
-import com.example.ui.theme.SurfaceCard
 import com.example.ui.theme.SurfaceDark
-import com.example.ui.theme.SurfaceElevated
-import com.example.ui.theme.SurfaceGlass
 import com.example.ui.theme.TextMuted
 import com.example.ui.theme.TextPrimary
 import com.example.ui.theme.TextSecondary
@@ -101,7 +94,7 @@ fun GalleryScreen(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Image(
                             painter = painterResource(id = R.drawable.ic_pixelforge_logo),
-                            contentDescription = "PixelForge SVG Logo",
+                            contentDescription = "Logo PixelForge",
                             modifier = Modifier.size(36.dp)
                         )
                         Spacer(modifier = Modifier.width(12.dp))
@@ -114,7 +107,7 @@ fun GalleryScreen(
                                 letterSpacing = 1.2.sp
                             )
                             Text(
-                                text = "PRO GRAPHIC ENGINE",
+                                text = "MOTEUR GRAPHIQUE PRO",
                                 color = ChampagneGold,
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,
@@ -162,7 +155,7 @@ fun GalleryScreen(
             ) {
                 Icon(
                     imageVector = Icons.Default.Add,
-                    contentDescription = "New Project",
+                    contentDescription = "Nouveau Projet",
                     modifier = Modifier.size(28.dp)
                 )
             }
@@ -181,7 +174,7 @@ fun GalleryScreen(
             item(span = { GridItemSpan(2) }) {
                 Column {
                     Text(
-                        text = "NEW CANVAS PRESETS",
+                        text = "MODÈLES DE CANEVAS",
                         color = TextSecondary,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
@@ -206,7 +199,7 @@ fun GalleryScreen(
                     }
                     Spacer(modifier = Modifier.height(20.dp))
                     Text(
-                        text = "MY ARTWORKS (${projects.size})",
+                        text = "MES CRÉATIONS (${projects.size})",
                         color = TextSecondary,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
@@ -235,9 +228,9 @@ fun GalleryScreen(
                                 modifier = Modifier.size(40.dp)
                             )
                             Spacer(modifier = Modifier.height(10.dp))
-                            Text("No projects yet", color = TextSecondary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                            Text("Aucun projet pour le moment", color = TextSecondary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                             Spacer(modifier = Modifier.height(4.dp))
-                            Text("Choose a preset above or tap + to start creating", color = TextMuted, fontSize = 12.sp)
+                            Text("Sélectionnez un modèle ci-dessus ou appuyez sur + pour créer", color = TextMuted, fontSize = 12.sp)
                         }
                     }
                 }
@@ -262,7 +255,7 @@ private fun PresetCard(
 ) {
     Box(
         modifier = Modifier
-            .size(width = 140.dp, height = 110.dp)
+            .size(width = 145.dp, height = 110.dp)
             .clip(RoundedCornerShape(14.dp))
             .background(SurfaceDark)
             .border(1.dp, BorderGlass, RoundedCornerShape(14.dp))
@@ -306,7 +299,7 @@ private fun ProjectGridCard(
     onDuplicate: () -> Unit,
     onDelete: () -> Unit
 ) {
-    val dateStr = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()).format(Date(project.updatedAt))
+    val dateStr = SimpleDateFormat("dd MMM yyyy", Locale.FRENCH).format(Date(project.updatedAt))
 
     GlassCard(
         modifier = Modifier
@@ -337,7 +330,7 @@ private fun ProjectGridCard(
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        text = "${project.layers.size} Layers",
+                        text = "${project.layers.size} Calques",
                         color = TextPrimary,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold
@@ -370,7 +363,7 @@ private fun ProjectGridCard(
                 IconButton(onClick = onDuplicate, modifier = Modifier.size(28.dp)) {
                     Icon(
                         imageVector = Icons.Default.ContentCopy,
-                        contentDescription = "Duplicate",
+                        contentDescription = "Dupliquer",
                         tint = TextSecondary,
                         modifier = Modifier.size(14.dp)
                     )
@@ -378,7 +371,7 @@ private fun ProjectGridCard(
                 IconButton(onClick = onDelete, modifier = Modifier.size(28.dp)) {
                     Icon(
                         imageVector = Icons.Default.Delete,
-                        contentDescription = "Delete",
+                        contentDescription = "Supprimer",
                         tint = Color(0xFFFF4444),
                         modifier = Modifier.size(14.dp)
                     )

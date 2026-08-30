@@ -88,7 +88,7 @@ fun ExportDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Export Artwork",
+                        text = "Exporter l'Œuvre",
                         color = ChampagneGold,
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold
@@ -96,7 +96,7 @@ fun ExportDialog(
                     IconButton(onClick = onDismiss, modifier = Modifier.size(32.dp)) {
                         Icon(
                             imageVector = Icons.Default.Close,
-                            contentDescription = "Close",
+                            contentDescription = "Fermer",
                             tint = TextSecondary
                         )
                     }
@@ -105,7 +105,7 @@ fun ExportDialog(
                 Spacer(modifier = Modifier.height(16.dp))
 
                 // Format selector
-                Text("Output Format", color = TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Text("Format d'exportation", color = TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(6.dp))
 
                 Row(
@@ -116,7 +116,7 @@ fun ExportDialog(
                         ExportFormat.PNG to "PNG",
                         ExportFormat.JPG to "JPG",
                         ExportFormat.WEBP to "WebP",
-                        ExportFormat.SVG to "SVG (Vector)"
+                        ExportFormat.SVG to "SVG (Vectoriel)"
                     ).forEach { (format, label) ->
                         val isSelected = selectedFormat == format
                         Box(
@@ -141,7 +141,7 @@ fun ExportDialog(
                 Spacer(modifier = Modifier.height(14.dp))
 
                 // Scale / Resolution
-                Text("Resolution Scale", color = TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Text("Échelle de résolution", color = TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(6.dp))
 
                 Row(
@@ -149,9 +149,9 @@ fun ExportDialog(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     listOf(
-                        1f to "1x (Standard)",
-                        2f to "2x (4K Ultra)",
-                        3f to "3x (8K Pro)"
+                        1f to "1x (Normal)",
+                        2f to "2x (Ultra HD)",
+                        3f to "3x (Print 4K)"
                     ).forEach { (scale, label) ->
                         val isSelected = selectedScale == scale
                         Box(
@@ -167,15 +167,26 @@ fun ExportDialog(
                                 text = label,
                                 color = if (isSelected) ObsidianBg else TextPrimary,
                                 fontSize = 11.sp,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                             )
                         }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(12.dp))
+                if (selectedFormat == ExportFormat.JPG || selectedFormat == ExportFormat.WEBP) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    LuxurySliderRow(
+                        label = "Qualité de compression",
+                        value = quality.toFloat(),
+                        valueRange = 50f..100f,
+                        unit = "%",
+                        onValueChange = { quality = it.toInt() }
+                    )
+                }
 
-                // Info card
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Dimensions summary
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -187,57 +198,53 @@ fun ExportDialog(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text("Dimensions:", color = TextMuted, fontSize = 12.sp)
-                        Text("$outputWidth x $outputHeight px", color = TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Text("Dimensions finales :", color = TextSecondary, fontSize = 12.sp)
+                        Text("$outputWidth x $outputHeight px", color = ChampagneGold, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
                 }
 
-                if (selectedFormat != ExportFormat.PNG) {
-                    Spacer(modifier = Modifier.height(10.dp))
-                    LuxurySliderRow(
-                        title = "Compression Quality",
-                        value = quality.toFloat(),
-                        onValueChange = { quality = it.toInt() },
-                        valueRange = 50f..100f,
-                        valueDisplay = "$quality%"
-                    )
-                }
+                Spacer(modifier = Modifier.height(16.dp))
 
                 if (exportSuccessMessage != null) {
-                    Spacer(modifier = Modifier.height(12.dp))
                     Row(
-                        verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
+                            .clip(RoundedCornerShape(10.dp))
                             .background(EmeraldSuccess.copy(alpha = 0.15f))
-                            .padding(10.dp)
+                            .border(1.dp, EmeraldSuccess, RoundedCornerShape(10.dp))
+                            .padding(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
                             imageVector = Icons.Default.CheckCircle,
                             contentDescription = null,
                             tint = EmeraldSuccess,
-                            modifier = Modifier.size(18.dp)
+                            modifier = Modifier.size(20.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             text = exportSuccessMessage,
-                            color = EmeraldSuccess,
+                            color = TextPrimary,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Medium
                         )
                     }
+                    Spacer(modifier = Modifier.height(14.dp))
                 }
 
-                Spacer(modifier = Modifier.height(20.dp))
-
                 if (isExporting) {
-                    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(color = ChampagneGold, modifier = Modifier.size(36.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        CircularProgressIndicator(color = ChampagneGold, modifier = Modifier.size(24.dp))
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text("Rendu et exportation...", color = TextSecondary, fontSize = 13.sp)
                     }
                 } else {
                     LuxuryButton(
-                        text = "Save to Gallery & Export",
+                        text = "Enregistrer dans l'appareil",
                         icon = Icons.Default.Download,
                         onClick = {
                             onExport(

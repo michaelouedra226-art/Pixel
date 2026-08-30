@@ -1,10 +1,15 @@
 package com.example.core.engine.render
 
 import android.graphics.Bitmap
+import android.graphics.Camera
 import android.graphics.ColorMatrix
 import android.graphics.ColorMatrixColorFilter
+import android.graphics.LinearGradient
+import android.graphics.Matrix
 import android.graphics.Paint
+import android.graphics.Path as AndroidPath
 import android.graphics.RectF
+import android.graphics.Shader
 import android.graphics.Typeface
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
@@ -12,9 +17,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.NativePaint
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.asAndroidPath
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Fill
@@ -28,6 +31,7 @@ import androidx.compose.ui.graphics.toArgb
 import com.example.core.engine.model.BezierLayer
 import com.example.core.engine.model.BlendModeDef
 import com.example.core.engine.model.CanvasProject
+import com.example.core.engine.model.ColorEraserDef
 import com.example.core.engine.model.ColorFill
 import com.example.core.engine.model.DrawingLayer
 import com.example.core.engine.model.GradientDef
@@ -37,8 +41,10 @@ import com.example.core.engine.model.Layer
 import com.example.core.engine.model.ShapeLayer
 import com.example.core.engine.model.TextLayer
 import com.example.core.engine.path.PathEngine
+import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.sin
+import kotlin.math.sqrt
 
 object CanvasRenderer {
 
@@ -89,8 +95,7 @@ object CanvasRenderer {
         canvasSize: Size
     ) {
         if (project.isTransparentBg) {
-            // Draw luxury dark checkerboard pattern
-            val checkSize = 20f
+            val checkSize = 24f
             val cols = (canvasSize.width / checkSize).toInt() + 1
             val rows = (canvasSize.height / checkSize).toInt() + 1
             for (r in 0 until rows) {
@@ -127,7 +132,6 @@ object CanvasRenderer {
         if (!layer.isVisible) return
 
         val t = layer.transform
-        val blendMode = mapBlendMode(layer.blendMode)
 
         drawScope.translate(left = t.x, top = t.y) {
             drawScope.rotate(
@@ -139,19 +143,51 @@ object CanvasRenderer {
                     scaleY = t.scaleY,
                     pivot = Offset(t.width / 2f, t.height / 2f)
                 ) {
+                    // Apply 3D Rotation (X and Y tilt) using Android Camera
+                    if (t.rotationX != 0f || t.rotationY != 0f) {
+                        drawScope.drawIntoCanvas { canvas ->
+                            val nativeCanvas = canvas.nativeCanvas
+                            nativeCanvas.save()
+                            val camera = Camera()
+                            val matrix = Matrix()
+                            camera.save()
+                            camera.rotateX(-t.rotationX)
+                            camera.rotateY(t.rotationY)
+                            camera.getMatrix(matrix)
+                            camera.restore()
+
+                            val centerX = t.width / 2f
+                            val centerY = t.height / 2f
+                            matrix.preTranslate(-centerX, -centerY)
+                            matrix.postTranslate(centerX, centerY)
+
+                            nativeCanvas.concat(matrix)
+                        }
+                    }
+
                     when (layer) {
-                        is TextLayer -> renderTextLayer(this, layer)
-                        is ShapeLayer -> renderShapeLayer(this, layer)
+                        is TextLayer -> renderTextLayer(this, layer, bitmapCache)
+                        is ShapeLayer -> renderShapeLayer(this, layer, bitmapCache)
                         is BezierLayer -> renderBezierLayer(this, layer)
                         is DrawingLayer -> renderDrawingLayer(this, layer)
                         is ImageLayer -> renderImageLayer(this, layer, bitmapCache)
+                    }
+
+                    if (t.rotationX != 0f || t.rotationY != 0f) {
+                        drawScope.drawIntoCanvas { canvas ->
+                            canvas.nativeCanvas.restore()
+                        }
                     }
                 }
             }
         }
     }
 
-    private fun renderShapeLayer(drawScope: DrawScope, layer: ShapeLayer) {
+    private fun renderShapeLayer(
+        drawScope: DrawScope,
+        layer: ShapeLayer,
+        bitmapCache: Map<String, Bitmap>
+    ) {
         val t = layer.transform
         val path = PathEngine.createShapePath(
             shapeType = layer.shapeType,
@@ -163,11 +199,49 @@ object CanvasRenderer {
             starInnerRatio = layer.starInnerRadiusRatio
         )
 
+        // 3D Effect for Shape
+        if (layer.effect3D.isEnabled && layer.effect3D.depth > 0) {
+            val depth = layer.effect3D.depth.toInt()
+            val angleRad = Math.toRadians(layer.effect3D.lightAngle.toDouble())
+            val dx = cos(angleRad).toFloat()
+            val dy = sin(angleRad).toFloat()
+            drawScope.drawIntoCanvas { canvas ->
+                val extrudePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = Color(layer.effect3D.color).toArgb()
+                    alpha = (layer.opacity * 255).toInt()
+                }
+                for (step in depth downTo 1) {
+                    val aPath = AndroidPath(path.asAndroidPath())
+                    val m = Matrix().apply { setTranslate(dx * step, dy * step) }
+                    aPath.transform(m)
+                    canvas.nativeCanvas.drawPath(aPath, extrudePaint)
+                }
+            }
+        }
+
+        // Glow
+        if (layer.glow.isEnabled && layer.glow.radius > 0) {
+            drawScope.drawIntoCanvas { canvas ->
+                val glowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = Color(layer.glow.color).toArgb()
+                    alpha = ((layer.glow.opacity * layer.opacity) * 255).toInt()
+                    setShadowLayer(
+                        layer.glow.radius,
+                        0f,
+                        0f,
+                        Color(layer.glow.color).toArgb()
+                    )
+                }
+                canvas.nativeCanvas.drawPath(path.asAndroidPath(), glowPaint)
+            }
+        }
+
         // Drop shadow
         if (layer.shadow.isEnabled) {
             drawScope.drawIntoCanvas { canvas ->
-                val shadowPaint = Paint().apply {
-                    color = Color(layer.shadow.color).copy(alpha = Color(layer.shadow.color).alpha * layer.opacity).toArgb()
+                val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = Color(layer.shadow.color).toArgb()
+                    alpha = ((Color(layer.shadow.color).alpha * layer.opacity) * 255).toInt()
                     setShadowLayer(
                         layer.shadow.radius,
                         layer.shadow.dx,
@@ -179,14 +253,55 @@ object CanvasRenderer {
             }
         }
 
-        // Fill
-        val fillBrush = createBrush(layer.fill, t.width, t.height)
-        drawScope.drawPath(
-            path = path,
-            brush = fillBrush,
-            alpha = layer.opacity,
-            style = Fill
-        )
+        // Fill (Texture / Gradient / Solid)
+        val textureBmp = layer.fill.textureUri?.let { bitmapCache[it] }
+        if (layer.fill.isTexture && textureBmp != null) {
+            drawScope.drawIntoCanvas { canvas ->
+                val bmpPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    val shader = android.graphics.BitmapShader(
+                        textureBmp,
+                        Shader.TileMode.REPEAT,
+                        Shader.TileMode.REPEAT
+                    )
+                    val matrix = Matrix()
+                    matrix.postScale(
+                        layer.fill.textureScale * (t.width / textureBmp.width.coerceAtLeast(1)),
+                        layer.fill.textureScale * (t.height / textureBmp.height.coerceAtLeast(1))
+                    )
+                    shader.setLocalMatrix(matrix)
+                    this.shader = shader
+                    alpha = (layer.opacity * 255).toInt()
+                }
+                canvas.nativeCanvas.drawPath(path.asAndroidPath(), bmpPaint)
+            }
+        } else {
+            val fillBrush = createBrush(layer.fill, t.width, t.height)
+            drawScope.drawPath(
+                path = path,
+                brush = fillBrush,
+                alpha = layer.opacity,
+                style = Fill
+            )
+        }
+
+        // Emboss / Bevel
+        if (layer.emboss.isEnabled) {
+            drawScope.drawIntoCanvas { canvas ->
+                val angleRad = Math.toRadians(layer.emboss.lightAngle.toDouble())
+                val dx = cos(angleRad).toFloat() * 2f
+                val dy = sin(angleRad).toFloat() * 2f
+                val embossPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    style = Paint.Style.STROKE
+                    strokeWidth = 2.5f
+                    color = android.graphics.Color.WHITE
+                    alpha = ((layer.emboss.intensity / 100f) * 180 * layer.opacity).toInt()
+                }
+                val m = Matrix().apply { setTranslate(dx, dy) }
+                val highlightPath = AndroidPath(path.asAndroidPath())
+                highlightPath.transform(m)
+                canvas.nativeCanvas.drawPath(highlightPath, embossPaint)
+            }
+        }
 
         // Stroke
         if (layer.stroke.isEnabled && layer.stroke.width > 0) {
@@ -238,7 +353,11 @@ object CanvasRenderer {
         }
     }
 
-    private fun renderTextLayer(drawScope: DrawScope, layer: TextLayer) {
+    private fun renderTextLayer(
+        drawScope: DrawScope,
+        layer: TextLayer,
+        bitmapCache: Map<String, Bitmap>
+    ) {
         val t = layer.transform
         val text = layer.text
 
@@ -246,11 +365,15 @@ object CanvasRenderer {
             val nativeCanvas = canvas.nativeCanvas
             val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 textSize = layer.fontSize
-                typeface = when {
-                    layer.isBold && layer.isItalic -> Typeface.create(Typeface.DEFAULT, Typeface.BOLD_ITALIC)
-                    layer.isBold -> Typeface.DEFAULT_BOLD
-                    layer.isItalic -> Typeface.create(Typeface.DEFAULT, Typeface.ITALIC)
-                    else -> Typeface.DEFAULT
+                typeface = when (layer.fontFamily) {
+                    "Serif", "Cinzel", "Playfair" -> Typeface.SERIF
+                    "Monospace" -> Typeface.MONOSPACE
+                    else -> when {
+                        layer.isBold && layer.isItalic -> Typeface.create(Typeface.DEFAULT, Typeface.BOLD_ITALIC)
+                        layer.isBold -> Typeface.DEFAULT_BOLD
+                        layer.isItalic -> Typeface.create(Typeface.DEFAULT, Typeface.ITALIC)
+                        else -> Typeface.DEFAULT
+                    }
                 }
                 letterSpacing = layer.letterSpacing * 0.05f
                 isUnderlineText = layer.isUnderline
@@ -268,6 +391,43 @@ object CanvasRenderer {
             }
             val yPos = t.height / 2f + (paint.textSize / 3f)
 
+            val isCurved = layer.curvature.isEnabled && layer.curvature.bend != 0f
+
+            // Create arc path if text curvature is enabled
+            var curvePath: AndroidPath? = null
+            if (isCurved) {
+                curvePath = AndroidPath()
+                val bend = layer.curvature.bend // -100 to 100
+                val radius = (t.width * 1.5f) / (abs(bend) / 50f).coerceAtLeast(0.1f)
+                val rectF = if (bend > 0) {
+                    RectF(t.width / 2f - radius, yPos - radius + 20f, t.width / 2f + radius, yPos + radius + 20f)
+                } else {
+                    RectF(t.width / 2f - radius, yPos - radius - 20f, t.width / 2f + radius, yPos + radius - 20f)
+                }
+                val startAngle = if (bend > 0) 180f + 90f - (t.width / radius * 25f) else 90f - (t.width / radius * 25f)
+                val sweepAngle = (t.width / radius * 50f) * (if (bend > 0) 1f else -1f)
+                curvePath.addArc(rectF, startAngle, sweepAngle)
+            }
+
+            // Glow Effect
+            if (layer.glow.isEnabled && layer.glow.radius > 0) {
+                val glowPaint = Paint(paint).apply {
+                    color = Color(layer.glow.color).toArgb()
+                    alpha = ((layer.glow.opacity * layer.opacity) * 255).toInt()
+                    setShadowLayer(
+                        layer.glow.radius,
+                        0f,
+                        0f,
+                        Color(layer.glow.color).toArgb()
+                    )
+                }
+                if (isCurved && curvePath != null) {
+                    nativeCanvas.drawTextOnPath(text, curvePath, 0f, 0f, glowPaint)
+                } else {
+                    nativeCanvas.drawText(text, xPos, yPos, glowPaint)
+                }
+            }
+
             // 3D Extrusion Effect
             if (layer.effect3D.isEnabled && layer.effect3D.depth > 0) {
                 val depth = layer.effect3D.depth.toInt()
@@ -282,12 +442,19 @@ object CanvasRenderer {
 
                 for (step in depth downTo 1) {
                     val stepOffset = step * 1f
-                    nativeCanvas.drawText(
-                        text,
-                        xPos + dx * stepOffset,
-                        yPos + dy * stepOffset,
-                        extrudePaint
-                    )
+                    if (isCurved && curvePath != null) {
+                        val shiftedPath = AndroidPath(curvePath)
+                        val m = Matrix().apply { setTranslate(dx * stepOffset, dy * stepOffset) }
+                        shiftedPath.transform(m)
+                        nativeCanvas.drawTextOnPath(text, shiftedPath, 0f, 0f, extrudePaint)
+                    } else {
+                        nativeCanvas.drawText(
+                            text,
+                            xPos + dx * stepOffset,
+                            yPos + dy * stepOffset,
+                            extrudePaint
+                        )
+                    }
                 }
             }
 
@@ -303,7 +470,11 @@ object CanvasRenderer {
                         Color(layer.shadow.color).toArgb()
                     )
                 }
-                nativeCanvas.drawText(text, xPos, yPos, shadowPaint)
+                if (isCurved && curvePath != null) {
+                    nativeCanvas.drawTextOnPath(text, curvePath, 0f, 0f, shadowPaint)
+                } else {
+                    nativeCanvas.drawText(text, xPos, yPos, shadowPaint)
+                }
             }
 
             // Outer Stroke
@@ -314,20 +485,41 @@ object CanvasRenderer {
                     color = Color(layer.stroke.color).toArgb()
                     alpha = (layer.opacity * 255).toInt()
                 }
-                nativeCanvas.drawText(text, xPos, yPos, strokePaint)
+                if (isCurved && curvePath != null) {
+                    nativeCanvas.drawTextOnPath(text, curvePath, 0f, 0f, strokePaint)
+                } else {
+                    nativeCanvas.drawText(text, xPos, yPos, strokePaint)
+                }
             }
 
-            // Main Text Fill
+            // Main Text Fill (with gradient or texture shader)
             val fillPaint = Paint(paint).apply {
                 style = Paint.Style.FILL
-                if (layer.fill.isGradient && layer.fill.gradient != null) {
+                val textureBmp = layer.fill.textureUri?.let { bitmapCache[it] }
+                if (layer.fill.isTexture && textureBmp != null) {
+                    val shader = android.graphics.BitmapShader(
+                        textureBmp,
+                        Shader.TileMode.REPEAT,
+                        Shader.TileMode.REPEAT
+                    )
+                    val matrix = Matrix()
+                    matrix.postScale(
+                        layer.fill.textureScale * (t.width / textureBmp.width.coerceAtLeast(1)),
+                        layer.fill.textureScale * (t.height / textureBmp.height.coerceAtLeast(1))
+                    )
+                    shader.setLocalMatrix(matrix)
+                    this.shader = shader
+                } else if (layer.fill.isGradient && layer.fill.gradient != null) {
                     val colors = layer.fill.gradient.colors.map { Color(it).toArgb() }.toIntArray()
                     val positions = layer.fill.gradient.stops.toFloatArray()
-                    val shader = android.graphics.LinearGradient(
-                        0f, 0f, t.width, t.height,
+                    val angleRad = Math.toRadians(layer.fill.gradient.angle.toDouble())
+                    val endX = t.width * cos(angleRad).toFloat()
+                    val endY = t.height * sin(angleRad).toFloat()
+                    val shader = LinearGradient(
+                        0f, 0f, endX.coerceAtLeast(1f), endY.coerceAtLeast(1f),
                         colors,
                         positions,
-                        android.graphics.Shader.TileMode.CLAMP
+                        Shader.TileMode.CLAMP
                     )
                     this.shader = shader
                 } else {
@@ -336,7 +528,32 @@ object CanvasRenderer {
                 alpha = (layer.opacity * 255).toInt()
             }
 
-            nativeCanvas.drawText(text, xPos, yPos, fillPaint)
+            if (isCurved && curvePath != null) {
+                nativeCanvas.drawTextOnPath(text, curvePath, 0f, 0f, fillPaint)
+            } else {
+                nativeCanvas.drawText(text, xPos, yPos, fillPaint)
+            }
+
+            // Emboss Highlight
+            if (layer.emboss.isEnabled) {
+                val angleRad = Math.toRadians(layer.emboss.lightAngle.toDouble())
+                val dx = cos(angleRad).toFloat() * 1.5f
+                val dy = sin(angleRad).toFloat() * 1.5f
+                val embossPaint = Paint(paint).apply {
+                    style = Paint.Style.STROKE
+                    strokeWidth = 1.2f
+                    color = android.graphics.Color.WHITE
+                    alpha = ((layer.emboss.intensity / 100f) * 200 * layer.opacity).toInt()
+                }
+                if (isCurved && curvePath != null) {
+                    val shiftedPath = AndroidPath(curvePath)
+                    val m = Matrix().apply { setTranslate(dx, dy) }
+                    shiftedPath.transform(m)
+                    nativeCanvas.drawTextOnPath(text, shiftedPath, 0f, 0f, embossPaint)
+                } else {
+                    nativeCanvas.drawText(text, xPos + dx, yPos + dy, embossPaint)
+                }
+            }
 
             // Reflection Effect
             if (layer.reflection.isEnabled) {
@@ -358,13 +575,19 @@ object CanvasRenderer {
         bitmapCache: Map<String, Bitmap>
     ) {
         val t = layer.transform
-        val bitmap = layer.imageUri?.let { bitmapCache[it] }
+        var bitmap = layer.imageUri?.let { bitmapCache[it] }
 
         if (bitmap != null) {
+            // Apply Color Eraser (Chroma Key) if enabled
+            val finalBitmap = if (layer.colorEraser.isEnabled) {
+                applyChromaKeyFilter(bitmap, layer.colorEraser)
+            } else {
+                bitmap
+            }
+
             drawScope.drawIntoCanvas { canvas ->
                 val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                     alpha = (layer.opacity * 255).toInt()
-                    // Color matrix for brightness, contrast, saturation
                     val cm = ColorMatrix()
                     cm.setSaturation(layer.saturation)
                     if (layer.brightness != 1f || layer.contrast != 1f) {
@@ -383,17 +606,43 @@ object CanvasRenderer {
                     colorFilter = ColorMatrixColorFilter(cm)
                 }
 
-                val srcRect = android.graphics.Rect(0, 0, bitmap.width, bitmap.height)
+                // Shadow
+                if (layer.shadow.isEnabled) {
+                    val shadowPaint = Paint(paint).apply {
+                        color = Color(layer.shadow.color).toArgb()
+                        alpha = ((Color(layer.shadow.color).alpha * layer.opacity) * 255).toInt()
+                        setShadowLayer(
+                            layer.shadow.radius,
+                            layer.shadow.dx,
+                            layer.shadow.dy,
+                            Color(layer.shadow.color).toArgb()
+                        )
+                    }
+                    canvas.nativeCanvas.drawRect(0f, 0f, t.width, t.height, shadowPaint)
+                }
+
+                val srcRect = android.graphics.Rect(0, 0, finalBitmap.width, finalBitmap.height)
                 val dstRect = RectF(0f, 0f, t.width, t.height)
-                canvas.nativeCanvas.drawBitmap(bitmap, srcRect, dstRect, paint)
+                canvas.nativeCanvas.drawBitmap(finalBitmap, srcRect, dstRect, paint)
+
+                // Optional Stroke for Image/Sticker
+                if (layer.stroke.isEnabled && layer.stroke.width > 0) {
+                    val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                        style = Paint.Style.STROKE
+                        strokeWidth = layer.stroke.width
+                        color = Color(layer.stroke.color).toArgb()
+                        alpha = (layer.opacity * 255).toInt()
+                    }
+                    canvas.nativeCanvas.drawRect(dstRect, strokePaint)
+                }
             }
         } else {
-            // Built-in luxury sticker placeholder or procedural sticker rendering
+            // Built-in sticker placeholder
             drawScope.drawRoundRect(
                 brush = Brush.linearGradient(listOf(Color(0xFFD4AF37), Color(0xFF997A15))),
                 size = Size(t.width, t.height),
                 cornerRadius = androidx.compose.ui.geometry.CornerRadius(16f, 16f),
-                alpha = layer.opacity * 0.8f
+                alpha = layer.opacity * 0.85f
             )
             drawScope.drawIntoCanvas { canvas ->
                 val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -406,5 +655,31 @@ object CanvasRenderer {
                 canvas.nativeCanvas.drawText(label, t.width / 2f, t.height / 2f + paint.textSize / 3f, paint)
             }
         }
+    }
+
+    private fun applyChromaKeyFilter(src: Bitmap, eraser: ColorEraserDef): Bitmap {
+        val width = src.width
+        val height = src.height
+        val output = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val pixels = IntArray(width * height)
+        src.getPixels(pixels, 0, width, 0, 0, width, height)
+
+        val targetR = (eraser.targetColor shr 16 and 0xFF).toInt()
+        val targetG = (eraser.targetColor shr 8 and 0xFF).toInt()
+        val targetB = (eraser.targetColor and 0xFF).toInt()
+        val tolSq = (eraser.tolerance * 2.55f) * (eraser.tolerance * 2.55f)
+
+        for (i in pixels.indices) {
+            val p = pixels[i]
+            val r = (p shr 16) and 0xFF
+            val g = (p shr 8) and 0xFF
+            val b = p and 0xFF
+            val distSq = (r - targetR) * (r - targetR) + (g - targetG) * (g - targetG) + (b - targetB) * (b - targetB)
+            if (distSq <= tolSq) {
+                pixels[i] = 0x00000000 // Transparent
+            }
+        }
+        output.setPixels(pixels, 0, width, 0, 0, width, height)
+        return output
     }
 }
