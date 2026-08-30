@@ -1,0 +1,6 @@
+{
+  "name": "PixelForge",
+  "description": "Studio de création graphique & éditeur photo mobile complet avec calques, texte stylisé, formes vectorielles, courbes de Bézier, dessin et export haute qualité.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
